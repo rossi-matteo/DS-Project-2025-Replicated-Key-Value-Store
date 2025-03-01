@@ -16,8 +16,6 @@
 #include <string>
 #include <map>
 #include <vector>
-#include <queue>
-//#include "CausalKVStoreMsg_m.h"
 
 using namespace omnetpp;
 
@@ -62,7 +60,7 @@ class DatastoreServer {
 
         //Standard Omnet++ methods to Override
         virtual void initialize() override;
-        virtual void handleMessage() override;
+        virtual void handleMessage(cMessage *msg) override;
         virtual void finish() override;
 
         void handleRead(ReadRequestMsg *msg);

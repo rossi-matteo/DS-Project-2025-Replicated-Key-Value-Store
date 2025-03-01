@@ -42,7 +42,7 @@ void DatastoreServer::handleMessage(cMessage *msg){
         return;
     }
 
-    NetworkMessages *inboundMsg = check_and_cast<NetworkMessages *>(msg);
+    NetworkMessages *inboundMsg = check_and_cast<cMessage *>(msg);
 
     if(dynamic_cast<ReadRequestMsg *>(inboundMsg)){
         handleRead(check_and_cast<ReadRequestMsg *>(inboundMsg));
@@ -51,13 +51,15 @@ void DatastoreServer::handleMessage(cMessage *msg){
         handleWrite(check_and_cast<WriteRequestMsg *>(inboundMsg));
     }
     else if(dynamic_cast<UpdateRequestMsg *>(inboundMsg)){
-        handleRead(check_and_cast<UpdateRequestMsg *>(inboundMsg));
+        handleUpdate(check_and_cast<UpdateRequestMsg *>(inboundMsg));
     }
     /* TODO All the other messages here
     else if(dynamic_cast<XXXRequestMsg *>(inboundMsg)){
         handleRead(check_and_cast<XXRequestMsg *>(inboundMsg));
     }
-     */
+    */
+
+    delete inboundMsg;
 }
 
 void DatastoreServer::finish(){
@@ -76,11 +78,42 @@ void DatastoreServer::finish(){
 }
 
 void DatastoreServer::handleRead(ReadRequestMsg *msg){
+    std::string key = msg->getKey();
+    int value = null;
 
+    if(store.find(key) != store.end()){
+        value = store[key];
+    }
+
+    ReadResponseMsg *response = new ReadResponseMsg();
+    response.setSourceId(serverId);
+    response.setKey(key);
+    response.setValue(value);
+
+    // Send response back to client
+    send(response, "outputChannel", msg->getArrivalGate()->getIndex());
+
+    EV << "Server " << serverId << " performed Read <" << key
+       << ", " << value << ">" << endl;
 }
 
 void DatastoreServer::handleWrite(WriteRequestMsg *msg){
+    std::string key = msg->getKey();
+    int value = msg->getValue();
 
+    // Apply write locally
+    //applyUpdate(key, value, serverId);
+
+    WriteResponseMsg *writeResponse = new WriteResponseMsg();
+    writeResponse.setSourceId(serverId);
+    writeResponse.setKey(key.c_str());
+    send(ack, "outputChannel", msg->getArrivalGate()->getIndex());
+
+    // Propagate to other servers
+    //propagateUpdate(key, value);
+
+    EV << "Server " << serverId << " performed Write <" << key
+       << ", " << value << ">" << endl;
 }
 
 void DatastoreServer::handleUpdate(UpdateRequestMsg *msg){

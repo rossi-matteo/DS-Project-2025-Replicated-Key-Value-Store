@@ -24,15 +24,49 @@ typedef std::map<std::string, int> Store;
 class noncobject VectorClock;
 class noncobject Store;
 
-packet NetworkMessages {
+message NetworkMessages{
     int sourceId;
 }
 
-packet ReadRequestMsg extends NetworkMsg {
+message ReadRequestMsg extends NetworkMsg {
     string key;
 }
 
-packet WriteRequestMsg extends NetworkMsg {
+message ReadResponseMsg extends NetworkMsg{
+    string key;
+    string value;
+}
+
+message WriteRequestMsg extends NetworkMsg {
     string key;
     int value;
 }
+
+message WriteResponseMsg extends NetworkMsg{
+    string key;
+}
+
+message UpdateMsg extends NetworkMsg{
+    int updateId;
+    string key;
+    string value;
+    VectorClock vectorClock; 
+}
+
+message HeartbeatMsg extends NetworkMsg{
+    int timestamp;
+}
+
+message HeartbeatAckMsg extends NetworkMsg{
+    int timestamp;
+}
+
+
+
+
+
+
+
+
+
+
