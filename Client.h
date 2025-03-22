@@ -15,13 +15,14 @@
 #include <string>
 #include <map>
 #include <vector>
+#include "NetworkMessages_m.h"
 
 using namespace omnetpp;
 
 #ifndef CLIENT_H_
 #define CLIENT_H_
 
-class Client {
+class Client : public cSimpleModule {
     private:
         int clientId;
         int connectedServerId;
@@ -31,18 +32,15 @@ class Client {
 
         std::vector<std::string> keySpace;
 
-        /*
-        Statistics
         int numReadsPerformed;
         int numWritesPerformed;
         cHistogram readLatencyStats;    
         cHistogram writeLatencyStats;
-        */
 
         typedef enum {OP_READ, OP_WRITE, OP_NONE} OperationType;
         OperationType currentOperation;
         std::string currentKey;
-        simtime_t operationStartTime;
+        simtime_t currentOperationStartTime;
 
         cMessage *operationTimer;
 
@@ -51,14 +49,18 @@ class Client {
         Client();
         virtual ~Client();
 
-        virtual void initialize() override;
-        virtual void handleMessage(cMessage *msg) override;
-        virtual void finish() override;
+        virtual void initialize();
+        virtual void handleMessage(NetworkMsg *msg);
+        virtual void finish();
 
         void sendRead();
         void sendWrite();
 
         void performOperation();
+
+    private:
+        std::string generateKey();
+        int generateValue();
 };
 
 #endif /* CLIENT_H_ */

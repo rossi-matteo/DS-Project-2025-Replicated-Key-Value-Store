@@ -16,7 +16,7 @@
 #include "Client.h"
 
 Client::Client() {
-    operationTimer = null;
+    operationTimer = nullptr;
 }
 
 Client::~Client() {}
@@ -60,7 +60,7 @@ void Client::finish() {
     }
 }
 
-void Client::handleMessage(cMessage *msg) {
+void Client::handleMessage(NetworkMsg *msg) {
 
     if(msg -> isSelfMessage()){
         if(msg == operationTimer) {
@@ -70,11 +70,11 @@ void Client::handleMessage(cMessage *msg) {
         return;
     }
     
-    NetworkMessages *inboundMsg = check_and_cast<cMessage *>(msg);
+    NetworkMsg *inboundMsg = check_and_cast<NetworkMsg *>(msg);
 
     if(dynamic_cast<ReadResponseMsg *>(inboundMsg)){
         ReadResponseMsg *readResponse = dynamic_cast<ReadResponseMsg *>(inboundMsg);
-        if(readResponse -> getOperationId() == currentOperationId){
+        if(currentOperation == OP_READ && readResponse -> getKey() == currentKey){
             currentOperation = OP_NONE;
             //numReadsPerformed++;
             simtime_t latency = simTime() - currentOperationStartTime;
@@ -84,12 +84,12 @@ void Client::handleMessage(cMessage *msg) {
         }
     } else if(dynamic_cast<WriteResponseMsg *>(inboundMsg)){
         WriteResponseMsg *writeResponse = dynamic_cast<WriteResponseMsg *>(inboundMsg);
-        if(writeResponse -> getOperationId() == currentOperationId){
+        if(currentOperation == OP_WRITE && writeResponse -> getKey() == currentKey){
             currentOperation = OP_NONE;
             //numWritesPerformed++;
             //writeLatencyStats.collect(simTime() - currentOperationStartTime);
             simtime_t latency = simTime() - currentOperationStartTime;
-            EV << "Client " << clientId << " wrote value " << writeResponse -> getValue() << " for key " << writeResponse -> getKey() << ", latency: " << latency << endl;
+            EV << "Client " << clientId << "key " << writeResponse -> getKey() << ", latency: " << latency << endl;
         }
     }
 
@@ -110,14 +110,14 @@ void Client::performOperation() {
     }
 }
 
-void Client::read(){
+void Client::sendRead(){
     std::string key = generateKey();
 
     ReadRequestMsg *readRequestMsg = new ReadRequestMsg();
-    readRequestMsg.setSourceId(clientId);
-    readRequestMsg.setKey(key.c_str());
+    readRequestMsg -> setSourceId(clientId);
+    readRequestMsg -> setKey(key.c_str());
 
-    send(readRequestMsg, "outputChannel");
+    send(readRequestMsg, "serverChannel");
 
     currentOperation = OP_READ;
     currentKey = key;
@@ -127,16 +127,16 @@ void Client::read(){
     EV << "Client " << clientId << " sent read request for key: " << key << endl;
 }
 
-void Client::write(){
+void Client::sendWrite(){
     std::string key = generateKey();
     int value = generateValue();
 
     WriteRequestMsg *writeRequestMsg = new WriteRequestMsg();
-    writeRequestMsg.setSourceId(clientId);
-    writeRequestMsg.setKey(key.c_str());
-    writeRequestMsg.setValue(value);
+    writeRequestMsg -> setSourceId(clientId);
+    writeRequestMsg -> setKey(key.c_str());
+    writeRequestMsg -> setValue(value);
 
-    send(writeRequestMsg, "outputChannel");
+    send(writeRequestMsg, "serverChannel");
 
     currentOperation = OP_WRITE;
     currentKey = key;

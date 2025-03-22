@@ -16,13 +16,14 @@
 #include <string>
 #include <map>
 #include <vector>
+#include "NetworkMessages_m.h"
 
 using namespace omnetpp;
 
 #ifndef DATASTORESERVER_H_
 #define DATASTORESERVER_H_
 
-class DatastoreServer {
+class DatastoreServer : public cSimpleModule {
     private:
         int serverId;
         int totalServers;
@@ -31,14 +32,17 @@ class DatastoreServer {
         std::map<std::string, int> store;
 
         //Vector Clocks
-        std::vector<int> vectorClock;
+        std::map<int,int> vectorClock;
+
+        // Online Datastores vector
+        std::unordered_set<int> onlineDatastores;
 
         //Pending Updates
         typedef struct {
             int updateId; //Maybe useless
             int sourceId;
 
-            std::vector<int> senderVectorClock;
+            std::map<int, int> senderVectorClock;
 
             std::string key;
             int value;
@@ -52,34 +56,29 @@ class DatastoreServer {
 
         int updateIdCounter;
 
-        //cMessage *heartbeatTimer;
+        cMessage *heartbeatTimer;
 
     public:
         DatastoreServer();
         virtual ~DatastoreServer();
 
-        //Standard Omnet++ methods to Override
-        virtual void initialize() override;
-        virtual void handleMessage(cMessage *msg) override;
-        virtual void finish() override;
+        virtual void initialize();
+        virtual void handleMessage(NetworkMsg *msg);
+        virtual void finish();
 
         void handleRead(ReadRequestMsg *msg);
         void handleWrite(WriteRequestMsg *msg);
-        void handleUpdate(UpdateRequestMsg *msg);
+        void handleUpdate(UpdateMsg *msg);
 
         void sendUpdate(std::string key, int value);
 
-        void applyUpdate();
+        void applyUpdate(int sourceId, std::string key, int value);
         void checkPendingUpdates();
 
-        bool checkCausalDependencies();
+        bool checkCausalDependencies(int sourceId, std::map<int, int> senderVectorClock);
 
-        //TODO
-        /*
-         * void handleHeartbeat(HeartbeatMsg *msg);
-         * void sendHeartbeat();
-         *
-         * */
+        void handleHeartbeat(HeartbeatMsg *msg);
+        void sendHeartbeats();
 };
 
 #endif /* DATASTORESERVER_H_ */

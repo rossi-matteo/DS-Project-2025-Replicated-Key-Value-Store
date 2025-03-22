@@ -19,12 +19,15 @@ simple DatastoreServer{
     parameters:
         int serverId;
         int totalServers;
+        int numClientsPerServer;
         double messageDelay @unit(s) = default(uniform(0.1s,0.5s));
         double omissionFailureProbability = default(0.05);
+        double heartbeatInterval @unit(s) = messageDelay * 10;
+        double maxAllowedHeartbeatDelay @unit(s) = heartbeatInterval * 3;
         
     gates:
-        input inputChannel[n];
-        output outputChannel[n];
+        inout serverChannels[totalServers-1]; //TODO: ERROR?
+        inout clientChannels[numClientsPerServer];
 }
 
 simple Client{
@@ -33,44 +36,42 @@ simple Client{
 	    int connectedServerId;
 	    double operationInterval @unit(s) = default(exponential(1s));
 	    double readProbability = default(0.8);
+        string keyspace = default("keyA,keyB,keyC");
 	    
 	gates:
-	    input inputChannel;
-	    output outputChannel;    
+        inout serverChannel;
 }
 
 network CausalConsistencyDatastoreNetwork{
     parameters:
         int numServers = default(3);
-        int numClientPerServer = default(2);
+        int numClientsPerServer = default(2);
         
     submodules:
         servers[numServers]: DatastoreServer {
             parameters:
                 serverId = index;
-                totalServers = numServers;
+                totalServers = parent.numServers;
+                numClientsPerServer = parent.numClientsPerServer;
             gates:
                 //Standard Topology: every Datastore Server is connected to everyone else (Dense Graph)
-                inputChannel[numServers-1];
-                outputChannel[numServers-1];
+                serverChannels[parent.numServers];
         }
         
-        clients[numServers*numClientsPerServer]: Client{
+        clients[numServers * numClientsPerServer]: Client{
             parameters:
                 clientId = index;
-                connectedServerId = index / numClientsPerServer;
+                connectedServerId = int(index / parent.numClientsPerServer);
         }
         
     connections:
-        for i=0..numServers-1, for j=0..numServers-1, if i != j {
-            servers[i].outputChannel[j > i ? j-1 : j] --> { delay = uniform(0.1s, 0.5s); } --> servers[j].inputChannel[i > j ? i-1 : i];
+        //Servers Connection
+        for i=0..numServers - 2, for j=i+1..numServers-1 {
+            servers[i].serverChannels[j-1] <--> { delay = default(uniform(0.1s, 0.5s)); } <--> servers[j].serverChannels[i];
         }
         
         //Clients Connection
-        for i=0..numServers*numClientsPerServer-1 {
-            clients[i].outputChannel --> {delay = default(uniform(0.01s,0.1s));} --> servers[client[i].connectedServerId].inputChannel[numServers-1+i];
-            servers[clients[i].connectedServerId].outputChannel[numServers-1+i] --> {delay = default(uniform(0.01s,0.1s));} --> clients[i].inputChannel;
+        for i=0..numServers * numClientsPerServer - 1 {
+            clients[i].serverChannel <--> {delay = default(uniform(0.01s,0.1s));} <--> servers[clients[i].connectedServerId].clientChannels[i % numClientsPerServer];
         }
 }
-
-

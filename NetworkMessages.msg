@@ -16,15 +16,14 @@
 cplusplus {{
 #include <map>
 #include <string>
-#include <vector>
-typedef std::vector<int> VectorClock;
+typedef std::map<int, int> VectorClock;
 typedef std::map<std::string, int> Store;
 }}
 
-class noncobject VectorClock;
-class noncobject Store;
+class VectorClock {@existingClass;}
+class Store {@existingClass;}
 
-message NetworkMessages{
+message NetworkMsg {
     int sourceId;
 }
 
@@ -34,7 +33,7 @@ message ReadRequestMsg extends NetworkMsg {
 
 message ReadResponseMsg extends NetworkMsg{
     string key;
-    string value;
+    int value;
 }
 
 message WriteRequestMsg extends NetworkMsg {
@@ -49,18 +48,17 @@ message WriteResponseMsg extends NetworkMsg{
 message UpdateMsg extends NetworkMsg{
     int updateId;
     string key;
-    string value;
+    int value;
     VectorClock vectorClock; 
+}
+
+message UpdateAckMsg extends NetworkMsg {
+    int updateId;
 }
 
 message HeartbeatMsg extends NetworkMsg{
     int timestamp;
 }
-
-message HeartbeatAckMsg extends NetworkMsg{
-    int timestamp;
-}
-
 
 
 
