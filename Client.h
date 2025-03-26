@@ -50,7 +50,7 @@ class Client : public cSimpleModule {
         virtual ~Client();
 
         virtual void initialize();
-        virtual void handleMessage(NetworkMsg *msg);
+        virtual void handleMessage(cMessage *msg);
         virtual void finish();
 
         void sendRead();

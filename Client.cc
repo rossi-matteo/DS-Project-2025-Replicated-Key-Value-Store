@@ -60,7 +60,7 @@ void Client::finish() {
     }
 }
 
-void Client::handleMessage(NetworkMsg *msg) {
+void Client::handleMessage(cMessage *msg) {
 
     if(msg -> isSelfMessage()){
         if(msg == operationTimer) {
@@ -76,7 +76,6 @@ void Client::handleMessage(NetworkMsg *msg) {
         ReadResponseMsg *readResponse = dynamic_cast<ReadResponseMsg *>(inboundMsg);
         if(currentOperation == OP_READ && readResponse -> getKey() == currentKey){
             currentOperation = OP_NONE;
-            //numReadsPerformed++;
             simtime_t latency = simTime() - currentOperationStartTime;
             //readLatencyStats.collect(latency);
 
@@ -86,7 +85,6 @@ void Client::handleMessage(NetworkMsg *msg) {
         WriteResponseMsg *writeResponse = dynamic_cast<WriteResponseMsg *>(inboundMsg);
         if(currentOperation == OP_WRITE && writeResponse -> getKey() == currentKey){
             currentOperation = OP_NONE;
-            //numWritesPerformed++;
             //writeLatencyStats.collect(simTime() - currentOperationStartTime);
             simtime_t latency = simTime() - currentOperationStartTime;
             EV << "Client " << clientId << "key " << writeResponse -> getKey() << ", latency: " << latency << endl;
@@ -117,12 +115,12 @@ void Client::sendRead(){
     readRequestMsg -> setSourceId(clientId);
     readRequestMsg -> setKey(key.c_str());
 
-    send(readRequestMsg, "serverChannel");
+    send(readRequestMsg, "serverChannel$o");
 
     currentOperation = OP_READ;
     currentKey = key;
     currentOperationStartTime = simTime();
-    //numReadsPerformed++;
+    numReadsPerformed++;
 
     EV << "Client " << clientId << " sent read request for key: " << key << endl;
 }
@@ -136,12 +134,12 @@ void Client::sendWrite(){
     writeRequestMsg -> setKey(key.c_str());
     writeRequestMsg -> setValue(value);
 
-    send(writeRequestMsg, "serverChannel");
+    send(writeRequestMsg, "serverChannel$o");
 
     currentOperation = OP_WRITE;
     currentKey = key;
     currentOperationStartTime = simTime();
-    //numWritesPerformed++;
+    numWritesPerformed++;
 
     EV << "Client " << clientId << " sent write request for <" << key << ", " << value << ">" << endl;
 }

@@ -26,7 +26,7 @@ simple DatastoreServer{
         double maxAllowedHeartbeatDelay @unit(s) = heartbeatInterval * 3;
         
     gates:
-        inout serverChannels[totalServers-1]; //TODO: ERROR?
+        inout serverChannels[totalServers-1];
         inout clientChannels[numClientsPerServer];
 }
 
@@ -55,7 +55,7 @@ network CausalConsistencyDatastoreNetwork{
                 numClientsPerServer = parent.numClientsPerServer;
             gates:
                 //Standard Topology: every Datastore Server is connected to everyone else (Dense Graph)
-                serverChannels[parent.numServers];
+                serverChannels[parent.numServers-1];
         }
         
         clients[numServers * numClientsPerServer]: Client{

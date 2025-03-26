@@ -36,7 +36,7 @@ void DatastoreServer::initialize(){
 }
 
 
-void DatastoreServer::handleMessage(NetworkMsg *msg){
+void DatastoreServer::handleMessage(cMessage *msg){
 
     if(msg -> isSelfMessage()){
         if(msg == heartbeatTimer) {
@@ -97,7 +97,7 @@ void DatastoreServer::handleRead(ReadRequestMsg *msg){
     response -> setValue(value);
 
     // Send response back to client
-    send(response, msg->getArrivalGate());
+    send(response, "clientChannels$o", msg->getSourceId() % par("numClientsPerServer").intValue());
 
     EV << "Server " << serverId << " performed Read <" << key
        << ", " << value << ">" << endl;
@@ -117,7 +117,7 @@ void DatastoreServer::handleWrite(WriteRequestMsg *msg){
     WriteResponseMsg *writeResponse = new WriteResponseMsg();
     writeResponse -> setSourceId(serverId);
     writeResponse -> setKey(key.c_str());
-    send(writeResponse, msg->getArrivalGate());
+    send(writeResponse, "clientChannels$o", msg->getSourceId() % par("numClientsPerServer").intValue());
 
     // Propagate to other servers
     sendUpdate(key, value);
@@ -178,7 +178,9 @@ void DatastoreServer::handleUpdate(UpdateMsg *msg){
     updateResponse->setUpdateId(msg->getUpdateId());
     //updateAck.setTargetServerId(...);
     
-    send(updateResponse, msg->getArrivalGate());
+    int gateIndex = msg->getSourceId() > serverId ? serverId-1 : serverId;
+
+    send(updateResponse, "serverChannels$o", gateIndex);
 }
 
 void DatastoreServer::sendUpdate(std::string key, int value){
