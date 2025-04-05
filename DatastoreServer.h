@@ -75,7 +75,7 @@ class DatastoreServer : public cSimpleModule {
         void applyUpdate(int sourceId, std::string key, int value);
         void checkPendingUpdates();
 
-        bool checkCausalDependencies(int sourceId, std::map<int, int> senderVectorClock);
+        bool isSatisfyingCausalDependencies(int sourceId, std::map<int, int> senderVectorClock);
 
         void handleHeartbeat(HeartbeatMsg *msg);
         void sendHeartbeats();

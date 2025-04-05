@@ -87,7 +87,7 @@ void Client::handleMessage(cMessage *msg) {
             currentOperation = OP_NONE;
             //writeLatencyStats.collect(simTime() - currentOperationStartTime);
             simtime_t latency = simTime() - currentOperationStartTime;
-            EV << "Client " << clientId << "key " << writeResponse -> getKey() << ", latency: " << latency << endl;
+            EV << "Client " << clientId << " requested to write key: " << writeResponse -> getKey() << " on server " << connectedServerId << ", latency: " << latency << endl;
         }
     }
 

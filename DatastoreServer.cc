@@ -33,6 +33,9 @@ void DatastoreServer::initialize(){
     updateIdCounter = 0;
 
     EV << "Server[" << serverId << "] starting" << endl;
+
+    heartbeatTimer = new cMessage("heartbeatTimer");
+    scheduleAt(simTime(), heartbeatTimer);
 }
 
 
@@ -110,7 +113,7 @@ void DatastoreServer::handleWrite(WriteRequestMsg *msg){
 
     // Apply write locally and update this server's vector clock
     store[key] = value;
-    vectorClock[sourceId]++;
+    vectorClock[serverId]++;
 
     EV << "Server " << serverId << " applied update for <key,value>: " << key << ", " << value << " from " << sourceId << endl;
     
@@ -126,8 +129,18 @@ void DatastoreServer::handleWrite(WriteRequestMsg *msg){
        << ", " << value << ">" << endl;
 }
 
-bool DatastoreServer::checkCausalDependencies(int sourceId, std::map<int, int> senderVectorClock){
+bool DatastoreServer::isSatisfyingCausalDependencies(int sourceId, std::map<int, int> senderVectorClock){
     // For every node other than the sender, check if the sender's clock is ahead of ours
+
+    EV << "==RECEIVER VC==" << endl;
+    for(auto entry : vectorClock)
+        EV << entry.first << "," << entry.second << endl;
+    EV << "==SENDER VC==" << endl;
+    for(auto entry : senderVectorClock)
+        EV << entry.first << "," << entry.second << endl;
+    EV << "==========" << endl;
+
+
     for(auto entry : senderVectorClock) { 
         if(entry.first == sourceId) 
             continue;
@@ -136,7 +149,7 @@ bool DatastoreServer::checkCausalDependencies(int sourceId, std::map<int, int> s
             return false;
     }
 
-    // Check that the source's clock is exactly one ahead of the receiver's
+    // Check that the sender's clock is exactly one ahead of the receiver's
     return senderVectorClock.at(sourceId) == vectorClock[sourceId] + 1;
 }
 
@@ -148,7 +161,7 @@ void DatastoreServer::handleUpdate(UpdateMsg *msg){
     std::map<int, int> senderVectorClock(msg->getVectorClock());
 
     // Check if the update is causally dependent
-    if(checkCausalDependencies(sourceId, senderVectorClock)){
+    if(isSatisfyingCausalDependencies(sourceId, senderVectorClock)){
         // Apply update locally
         EV << "Server " << serverId << " applying update from server " << sourceId 
         << " for key " << key << endl;
@@ -161,7 +174,7 @@ void DatastoreServer::handleUpdate(UpdateMsg *msg){
     }else{
         // Store the update in the pending updates list
         EV << "Server " << serverId << " queuing update from server " << sourceId 
-        << " for key " << key << " (dependencies not satisfied)" << endl;
+        << " for key: " << key << " (dependencies not satisfied)" << endl;
 
         PendingUpdate newPendingUpdate;
         newPendingUpdate.key = key;
@@ -178,7 +191,7 @@ void DatastoreServer::handleUpdate(UpdateMsg *msg){
     updateResponse->setUpdateId(msg->getUpdateId());
     //updateAck.setTargetServerId(...);
     
-    int gateIndex = msg->getSourceId() > serverId ? serverId-1 : serverId;
+    int gateIndex = (msg->getSourceId() > serverId) ? msg->getSourceId()-1 : msg->getSourceId();
 
     send(updateResponse, "serverChannels$o", gateIndex);
 }
@@ -222,7 +235,7 @@ void DatastoreServer::checkPendingUpdates(){
         applied = false;
 
         for(auto it = pendingUpdates.begin(); it != pendingUpdates.end(); ){
-            if(checkCausalDependencies(it->sourceId, it->senderVectorClock)){
+            if(isSatisfyingCausalDependencies(it->sourceId, it->senderVectorClock)){
                 // Apply update locally
                 EV << "Server " << serverId << " applying queued update from server " << it->sourceId 
                 << " for key " << it->key << endl;
