@@ -21,6 +21,7 @@ DatastoreServer::DatastoreServer() {
 
 DatastoreServer::~DatastoreServer() {
     cancelAndDelete(heartbeatTimer);
+    cancelAndDelete(retransmissionTimer);
 }
 
 void DatastoreServer::initialize(){
@@ -36,6 +37,9 @@ void DatastoreServer::initialize(){
 
     heartbeatTimer = new cMessage("heartbeatTimer");
     scheduleAt(simTime(), heartbeatTimer);
+
+    retransmissionTimer = new cMessage("retransmissionTimer");
+    scheduleAt(simTime() + par("retransmissionInterval").doubleValue(), retransmissionTimer);
 }
 
 
@@ -45,6 +49,9 @@ void DatastoreServer::handleMessage(cMessage *msg){
         if(msg == heartbeatTimer) {
             sendHeartbeats();
             scheduleAt(simTime() + par("heartbeatInterval").doubleValue(), heartbeatTimer);
+        } else if(msg == retransmissionTimer) {
+            retransmitUnackedUpdates();
+            scheduleAt(simTime() + par("retransmissionInterval").doubleValue(), retransmissionTimer);
         }
         return;
     }
@@ -157,8 +164,27 @@ void DatastoreServer::handleUpdate(UpdateMsg *msg){
     std::string key = msg->getKey();
     int value = msg->getValue();
     int sourceId = msg->getSourceId();
+    int updateId = msg->getUpdateId();
 
     std::map<int, int> senderVectorClock(msg->getVectorClock());
+
+    // Check if the same update has already been received
+    std::pair<int, int> updateInformation = {sourceId, updateId};
+    if (receivedUpdates.contains(updateInformation)) {
+        EV << "Server " << serverId << " ignoring duplicate update " << updateId << " from server " << sourceId << endl;
+        
+        // Still send back ack in case original got lost
+        UpdateAckMsg *ack = new UpdateAckMsg();
+        ack->setSourceId(serverId);
+        ack->setUpdateId(updateId);
+        int gateIndex = (sourceId > serverId) ? sourceId - 1 : sourceId;
+        send(ack, "serverChannels$o", gateIndex);
+
+        return;
+    }
+
+    // Add the update information to the receivedUpdates set
+    receivedUpdates.insert(updateInformation);
 
     // Check if the update is causally dependent
     if(isSatisfyingCausalDependencies(sourceId, senderVectorClock)){
@@ -188,12 +214,24 @@ void DatastoreServer::handleUpdate(UpdateMsg *msg){
     // Send ack back to the sender
     UpdateAckMsg *updateResponse = new UpdateAckMsg();
     updateResponse->setSourceId(serverId);
-    updateResponse->setUpdateId(msg->getUpdateId());
+    updateResponse->setUpdateId(updateId);
     //updateAck.setTargetServerId(...);
     
-    int gateIndex = (msg->getSourceId() > serverId) ? msg->getSourceId()-1 : msg->getSourceId();
+    int gateIndex = (sourceId > serverId) ? sourceId-1 : sourceId;
 
     send(updateResponse, "serverChannels$o", gateIndex);
+}
+
+void DatastoreServer::handleUpdateAck(UpdateAckMsg *msg) {
+    int fromServer = msg->getSourceId();
+    int updateId = msg->getUpdateId();
+
+    if (unackedUpdates[fromServer].contains(updateId)) {
+        delete unackedUpdates[fromServer][updateId].msg; // Clean up the old message
+        unackedUpdates[fromServer].erase(updateId); // Remove the message from the unacked ones
+
+        EV << "Server " << serverId << " received ack for update " << updateId << " from server " << fromServer << endl;
+    }
 }
 
 void DatastoreServer::sendUpdate(std::string key, int value){
@@ -210,7 +248,6 @@ void DatastoreServer::sendUpdate(std::string key, int value){
         updateMsg->setKey(key.c_str());
         updateMsg->setValue(value);
         updateMsg->setUpdateId(updateIdCounter++);
-
         updateMsg->setVectorClock(vectorClock);
 
         /*
@@ -222,7 +259,10 @@ void DatastoreServer::sendUpdate(std::string key, int value){
         }
         */ 
 
-        send(updateMsg, "serverChannels$o", i);
+        send(updateMsg->dup(), "serverChannels$o", i);
+
+        // TODO are we sure that i is the server's id?
+        unackedUpdates[i][updateMsg->getUpdateId()] = {updateMsg, simTime()}; // Add the newly created update to the unacked ones
 
         EV << "Server " << serverId << " sent update for <" << key << ", " << value << "> to server " << i << endl;
     }
@@ -243,6 +283,7 @@ void DatastoreServer::checkPendingUpdates(){
                 //Apply Update
                 store[it->key] = it->value;
                 vectorClock[it->sourceId] = it->senderVectorClock[it->sourceId];
+                appliedUpdates.insert({it->sourceId, it->updateId});
 
                 // Remove the update from the pending list
                 it = pendingUpdates.erase(it);
@@ -284,10 +325,25 @@ void DatastoreServer::sendHeartbeats() {
 
         send(heartbeatMsg, "serverChannels$o", gateIndex);
     }
-    
 }
 
+void DatastoreServer::retransmitUnackedUpdates(){
+    for(auto &serverPair : unackedUpdates){
+        int targetServer = serverPair.first;
 
+        for(auto &updatePair : serverPair.second){
+            int updateId = updatePair.first;
+            SentUpdate &update = updatePair.second;
+
+            if(simTime() - update.timestamp >= par("retransmissionInterval").doubleValue()){
+                send(update.msg->dup(), "serverChannels$o", targetServer);
+                update.timestamp = simTime();
+
+                EV << "Server " << serverId << " retransmitting update " << updateId << " to server " << targetServer << endl;
+            }
+        }
+    }
+}
 
 
 

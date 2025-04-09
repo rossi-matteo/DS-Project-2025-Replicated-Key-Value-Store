@@ -23,6 +23,7 @@ simple DatastoreServer{
         double messageDelay @unit(s) = default(uniform(0.1s,0.5s));
         double omissionFailureProbability = default(0.05);
         double heartbeatInterval @unit(s) = messageDelay * 10;
+        double retransmissionInterval @unit(s) = 0.5;
         double maxAllowedHeartbeatDelay @unit(s) = heartbeatInterval * 3;
         
     gates:
