@@ -16,7 +16,7 @@
 #include <string>
 #include <map>
 #include <vector>
-#include <pair>
+#include <utility>
 #include "NetworkMessages_m.h"
 
 using namespace omnetpp;
@@ -58,14 +58,15 @@ class DatastoreServer : public cSimpleModule {
         int updateIdCounter;
 
         cMessage *heartbeatTimer;
+        cMessage *retransmissionTimer;
 
-        typedef SentUpdate {
-            UpdateMsg* UpdateMsg;
+        typedef struct {
+            UpdateMsg* updateMsg;
             simtime_t timestamp;
-        }
+        } SentUpdate;
 
         std::map<int, std::map<int, SentUpdate>> unackedUpdates; // serverId -> (updateId -> SentUpdate)
-        std::set<std::pair<int, int>> receinvedUpdates; // set to keep track of received updates
+        std::set<std::pair<int, int>> receivedUpdates; // set to keep track of received updates
 
     public:
         DatastoreServer();
@@ -78,7 +79,7 @@ class DatastoreServer : public cSimpleModule {
         void handleRead(ReadRequestMsg *msg);
         void handleWrite(WriteRequestMsg *msg);
         void handleUpdate(UpdateMsg *msg);
-        void handleUpdateAck(UpdateAckMsg *msg)
+        void handleUpdateAck(UpdateAckMsg *msg);
 
         void sendUpdate(std::string key, int value);
 

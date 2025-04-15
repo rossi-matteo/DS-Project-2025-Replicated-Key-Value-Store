@@ -227,7 +227,7 @@ void DatastoreServer::handleUpdateAck(UpdateAckMsg *msg) {
     int updateId = msg->getUpdateId();
 
     if (unackedUpdates[fromServer].contains(updateId)) {
-        delete unackedUpdates[fromServer][updateId].msg; // Clean up the old message
+        delete unackedUpdates[fromServer][updateId].updateMsg; // Clean up the old message
         unackedUpdates[fromServer].erase(updateId); // Remove the message from the unacked ones
 
         EV << "Server " << serverId << " received ack for update " << updateId << " from server " << fromServer << endl;
@@ -283,7 +283,7 @@ void DatastoreServer::checkPendingUpdates(){
                 //Apply Update
                 store[it->key] = it->value;
                 vectorClock[it->sourceId] = it->senderVectorClock[it->sourceId];
-                appliedUpdates.insert({it->sourceId, it->updateId});
+                receivedUpdates.insert({it->sourceId, it->updateId});
 
                 // Remove the update from the pending list
                 it = pendingUpdates.erase(it);
@@ -336,7 +336,7 @@ void DatastoreServer::retransmitUnackedUpdates(){
             SentUpdate &update = updatePair.second;
 
             if(simTime() - update.timestamp >= par("retransmissionInterval").doubleValue()){
-                send(update.msg->dup(), "serverChannels$o", targetServer);
+                send(update.updateMsg->dup(), "serverChannels$o", targetServer);
                 update.timestamp = simTime();
 
                 EV << "Server " << serverId << " retransmitting update " << updateId << " to server " << targetServer << endl;
