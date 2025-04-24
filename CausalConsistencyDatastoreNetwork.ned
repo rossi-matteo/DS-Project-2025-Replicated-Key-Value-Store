@@ -21,9 +21,8 @@ simple DatastoreServer{
         int totalServers;
         int numClientsPerServer;
         double messageDelay @unit(s) = default(uniform(0.1s,0.5s));
-        double omissionFailureProbability = default(0.05);
+        double omissionFailureProbability = default(0.1);
         double heartbeatInterval @unit(s) = messageDelay * 10;
-        double retransmissionInterval @unit(s) = default(0.5s);
         double maxAllowedHeartbeatDelay @unit(s) = heartbeatInterval * 3;
         
     gates:
@@ -41,6 +40,12 @@ simple Client{
 	    
 	gates:
         inout serverChannel;
+}
+
+channel LossyChannel extends ned.DatarateChannel {
+    parameters:
+        delay = uniform(0.1s, 0.5s);
+        per = default(0.1);  // Packet Error Rate
 }
 
 network CausalConsistencyDatastoreNetwork{
@@ -68,7 +73,7 @@ network CausalConsistencyDatastoreNetwork{
     connections:
         //Servers Connection
         for i=0..numServers - 2, for j=i+1..numServers-1 {
-            servers[i].serverChannels[j-1] <--> { delay = default(uniform(0.1s, 0.5s)); } <--> servers[j].serverChannels[i];
+            servers[i].serverChannels[j-1] <--> LossyChannel <--> servers[j].serverChannels[i];
         }
         
         //Clients Connection

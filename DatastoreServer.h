@@ -16,7 +16,8 @@
 #include <string>
 #include <map>
 #include <vector>
-#include <utility>
+#include <set>
+#include <algorithm>
 #include "NetworkMessages_m.h"
 
 using namespace omnetpp;
@@ -26,47 +27,46 @@ using namespace omnetpp;
 
 class DatastoreServer : public cSimpleModule {
     private:
+        // ID associated to this datastore
         int serverId;
+
+        // Total number of servers in the system
         int totalServers;
 
-        //Key-Value Store
+        // Probability to drop a incoming/outgoing packet
+        double omissionFailureProbability;
+
+        // Key-Value Store
         std::map<std::string, int> store;
 
-        //Vector Clocks
+        // Vector clock associated to the datastore
         std::map<int,int> vectorClock;
 
-        // Online Datastores vector
-        std::unordered_set<int> onlineDatastores;
-
-        //Pending Updates
+        // Online datastores and the timestamp of their last heartbeat
+        std::map<int, simtime_t> onlineDatastores;
+        
+        // Struct definition for storing update information
         typedef struct {
-            int updateId; //Maybe useless
             int sourceId;
-
             std::map<int, int> senderVectorClock;
-
             std::string key;
             int value;
-        }PendingUpdate;
+        } Update;
 
-        std::vector<PendingUpdate> pendingUpdates;
+        // Updates which at the moment do not satisfy causal dependencies and will be applied later
+        std::vector<Update> pendingUpdates;  
 
-        /*
-         * std::vector<bool>areServersUp;
-         * */
+        // Log of updates (for updating other datastores when they loose messages)
+        std::map<int, std::map<int, Update>> receivedUpdates;
 
-        int updateIdCounter;
-
+        // Message used to periodically send heartbeats to other datastores
         cMessage *heartbeatTimer;
-        cMessage *retransmissionTimer;
 
-        typedef struct {
-            UpdateMsg* updateMsg;
-            simtime_t timestamp;
-        } SentUpdate;
+        // Used to check updates applied by every datastore (to delete them from the receivedUpdates map)
+        std::map<int, std::map<int,int>> lastKnownVectorClocks;
 
-        std::map<int, std::map<int, SentUpdate>> unackedUpdates; // serverId -> (updateId -> SentUpdate)
-        std::set<std::pair<int, int>> receivedUpdates; // set to keep track of received updates
+        // Vector clock containing as fields the youngest update (for each server) received (not necessarily applied) by everyone
+        std::map<int, int> prevMinVectorClock;
 
     public:
         DatastoreServer();
@@ -76,22 +76,29 @@ class DatastoreServer : public cSimpleModule {
         virtual void handleMessage(cMessage *msg);
         virtual void finish();
 
+    private:
         void handleRead(ReadRequestMsg *msg);
         void handleWrite(WriteRequestMsg *msg);
-        void handleUpdate(UpdateMsg *msg);
-        void handleUpdateAck(UpdateAckMsg *msg);
+        void handleUpdate(WritePropagationMsg *msg);
+        void handleMissingWrites(MissingWritesRequestMsg *msg);
 
         void sendUpdate(std::string key, int value);
 
-        void applyUpdate(int sourceId, std::string key, int value);
         void checkPendingUpdates();
-
-        bool isSatisfyingCausalDependencies(int sourceId, std::map<int, int> senderVectorClock);
+        int isSatisfyingCausalDependencies(int sourceId, std::map<int, int> senderVectorClock);
 
         void handleHeartbeat(HeartbeatMsg *msg);
         void sendHeartbeats();
 
-        void retransmitUnackedUpdates();
+        void deleteUpdatesAppliedByEveryone();
+
+        std::set<int> getOnlineDatastores();
+
+        Update storeWrite(std::string key, int value, int serverId, std::map<int, int> vectorClock);
+
+        inline int fromServerToGate(int id);
+        inline int fromGateToServer(int index);
+        std::string parseMessageToRetrieveSenderModuleClass(cMessage *msg);
 };
 
 #endif /* DATASTORESERVER_H_ */

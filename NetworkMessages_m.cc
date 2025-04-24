@@ -720,6 +720,291 @@ void StoreDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, int fi
     }
 }
 
+class WritesDescriptor : public omnetpp::cClassDescriptor
+{
+  private:
+    mutable const char **propertyNames;
+    enum FieldConstants {
+    };
+  public:
+    WritesDescriptor();
+    virtual ~WritesDescriptor();
+
+    virtual bool doesSupport(omnetpp::cObject *obj) const override;
+    virtual const char **getPropertyNames() const override;
+    virtual const char *getProperty(const char *propertyName) const override;
+    virtual int getFieldCount() const override;
+    virtual const char *getFieldName(int field) const override;
+    virtual int findField(const char *fieldName) const override;
+    virtual unsigned int getFieldTypeFlags(int field) const override;
+    virtual const char *getFieldTypeString(int field) const override;
+    virtual const char **getFieldPropertyNames(int field) const override;
+    virtual const char *getFieldProperty(int field, const char *propertyName) const override;
+    virtual int getFieldArraySize(omnetpp::any_ptr object, int field) const override;
+    virtual void setFieldArraySize(omnetpp::any_ptr object, int field, int size) const override;
+
+    virtual const char *getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const override;
+    virtual std::string getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const override;
+    virtual void setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const override;
+    virtual omnetpp::cValue getFieldValue(omnetpp::any_ptr object, int field, int i) const override;
+    virtual void setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const override;
+
+    virtual const char *getFieldStructName(int field) const override;
+    virtual omnetpp::any_ptr getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const override;
+    virtual void setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const override;
+};
+
+Register_ClassDescriptor(WritesDescriptor)
+
+WritesDescriptor::WritesDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(Writes)), "")
+{
+    propertyNames = nullptr;
+}
+
+WritesDescriptor::~WritesDescriptor()
+{
+    delete[] propertyNames;
+}
+
+bool WritesDescriptor::doesSupport(omnetpp::cObject *obj) const
+{
+    return dynamic_cast<Writes *>(obj)!=nullptr;
+}
+
+const char **WritesDescriptor::getPropertyNames() const
+{
+    if (!propertyNames) {
+        static const char *names[] = { "existingClass",  nullptr };
+        omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+        const char **baseNames = base ? base->getPropertyNames() : nullptr;
+        propertyNames = mergeLists(baseNames, names);
+    }
+    return propertyNames;
+}
+
+const char *WritesDescriptor::getProperty(const char *propertyName) const
+{
+    if (!strcmp(propertyName, "existingClass")) return "";
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    return base ? base->getProperty(propertyName) : nullptr;
+}
+
+int WritesDescriptor::getFieldCount() const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    return base ? 0+base->getFieldCount() : 0;
+}
+
+unsigned int WritesDescriptor::getFieldTypeFlags(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldTypeFlags(field);
+        field -= base->getFieldCount();
+    }
+    return 0;
+}
+
+const char *WritesDescriptor::getFieldName(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldName(field);
+        field -= base->getFieldCount();
+    }
+    return nullptr;
+}
+
+int WritesDescriptor::findField(const char *fieldName) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    return base ? base->findField(fieldName) : -1;
+}
+
+const char *WritesDescriptor::getFieldTypeString(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldTypeString(field);
+        field -= base->getFieldCount();
+    }
+    return nullptr;
+}
+
+const char **WritesDescriptor::getFieldPropertyNames(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldPropertyNames(field);
+        field -= base->getFieldCount();
+    }
+    switch (field) {
+        default: return nullptr;
+    }
+}
+
+const char *WritesDescriptor::getFieldProperty(int field, const char *propertyName) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldProperty(field, propertyName);
+        field -= base->getFieldCount();
+    }
+    switch (field) {
+        default: return nullptr;
+    }
+}
+
+int WritesDescriptor::getFieldArraySize(omnetpp::any_ptr object, int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldArraySize(object, field);
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: return 0;
+    }
+}
+
+void WritesDescriptor::setFieldArraySize(omnetpp::any_ptr object, int field, int size) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount()){
+            base->setFieldArraySize(object, field, size);
+            return;
+        }
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot set array size of field %d of class 'Writes'", field);
+    }
+}
+
+const char *WritesDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldDynamicTypeString(object,field,i);
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: return nullptr;
+    }
+}
+
+std::string WritesDescriptor::getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldValueAsString(object,field,i);
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: return "";
+    }
+}
+
+void WritesDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount()){
+            base->setFieldValueAsString(object, field, i, value);
+            return;
+        }
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'Writes'", field);
+    }
+}
+
+omnetpp::cValue WritesDescriptor::getFieldValue(omnetpp::any_ptr object, int field, int i) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldValue(object,field,i);
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'Writes' as cValue -- field index out of range?", field);
+    }
+}
+
+void WritesDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount()){
+            base->setFieldValue(object, field, i, value);
+            return;
+        }
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'Writes'", field);
+    }
+}
+
+const char *WritesDescriptor::getFieldStructName(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldStructName(field);
+        field -= base->getFieldCount();
+    }
+    return nullptr;
+}
+
+omnetpp::any_ptr WritesDescriptor::getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldStructValuePointer(object, field, i);
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: return omnetpp::any_ptr(nullptr);
+    }
+}
+
+void WritesDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount()){
+            base->setFieldStructValuePointer(object, field, i, ptr);
+            return;
+        }
+        field -= base->getFieldCount();
+    }
+    Writes *pp = omnetpp::fromAnyPtr<Writes>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'Writes'", field);
+    }
+}
+
 Register_Class(NetworkMsg)
 
 NetworkMsg::NetworkMsg(const char *name, short kind) : ::omnetpp::cMessage(name, kind)
@@ -2524,22 +2809,22 @@ void WriteResponseMsgDescriptor::setFieldStructValuePointer(omnetpp::any_ptr obj
     }
 }
 
-Register_Class(UpdateMsg)
+Register_Class(WritePropagationMsg)
 
-UpdateMsg::UpdateMsg(const char *name, short kind) : ::NetworkMsg(name, kind)
+WritePropagationMsg::WritePropagationMsg(const char *name, short kind) : ::NetworkMsg(name, kind)
 {
 }
 
-UpdateMsg::UpdateMsg(const UpdateMsg& other) : ::NetworkMsg(other)
+WritePropagationMsg::WritePropagationMsg(const WritePropagationMsg& other) : ::NetworkMsg(other)
 {
     copy(other);
 }
 
-UpdateMsg::~UpdateMsg()
+WritePropagationMsg::~WritePropagationMsg()
 {
 }
 
-UpdateMsg& UpdateMsg::operator=(const UpdateMsg& other)
+WritePropagationMsg& WritePropagationMsg::operator=(const WritePropagationMsg& other)
 {
     if (this == &other) return *this;
     ::NetworkMsg::operator=(other);
@@ -2547,85 +2832,71 @@ UpdateMsg& UpdateMsg::operator=(const UpdateMsg& other)
     return *this;
 }
 
-void UpdateMsg::copy(const UpdateMsg& other)
+void WritePropagationMsg::copy(const WritePropagationMsg& other)
 {
-    this->updateId = other.updateId;
     this->key = other.key;
     this->value = other.value;
     this->vectorClock = other.vectorClock;
 }
 
-void UpdateMsg::parsimPack(omnetpp::cCommBuffer *b) const
+void WritePropagationMsg::parsimPack(omnetpp::cCommBuffer *b) const
 {
     ::NetworkMsg::parsimPack(b);
-    doParsimPacking(b,this->updateId);
     doParsimPacking(b,this->key);
     doParsimPacking(b,this->value);
     doParsimPacking(b,this->vectorClock);
 }
 
-void UpdateMsg::parsimUnpack(omnetpp::cCommBuffer *b)
+void WritePropagationMsg::parsimUnpack(omnetpp::cCommBuffer *b)
 {
     ::NetworkMsg::parsimUnpack(b);
-    doParsimUnpacking(b,this->updateId);
     doParsimUnpacking(b,this->key);
     doParsimUnpacking(b,this->value);
     doParsimUnpacking(b,this->vectorClock);
 }
 
-int UpdateMsg::getUpdateId() const
-{
-    return this->updateId;
-}
-
-void UpdateMsg::setUpdateId(int updateId)
-{
-    this->updateId = updateId;
-}
-
-const char * UpdateMsg::getKey() const
+const char * WritePropagationMsg::getKey() const
 {
     return this->key.c_str();
 }
 
-void UpdateMsg::setKey(const char * key)
+void WritePropagationMsg::setKey(const char * key)
 {
     this->key = key;
 }
 
-int UpdateMsg::getValue() const
+int WritePropagationMsg::getValue() const
 {
     return this->value;
 }
 
-void UpdateMsg::setValue(int value)
+void WritePropagationMsg::setValue(int value)
 {
     this->value = value;
 }
 
-const VectorClock& UpdateMsg::getVectorClock() const
+const VectorClock& WritePropagationMsg::getVectorClock() const
 {
     return this->vectorClock;
 }
 
-void UpdateMsg::setVectorClock(const VectorClock& vectorClock)
+void WritePropagationMsg::setVectorClock(const VectorClock& vectorClock)
 {
     this->vectorClock = vectorClock;
 }
 
-class UpdateMsgDescriptor : public omnetpp::cClassDescriptor
+class WritePropagationMsgDescriptor : public omnetpp::cClassDescriptor
 {
   private:
     mutable const char **propertyNames;
     enum FieldConstants {
-        FIELD_updateId,
         FIELD_key,
         FIELD_value,
         FIELD_vectorClock,
     };
   public:
-    UpdateMsgDescriptor();
-    virtual ~UpdateMsgDescriptor();
+    WritePropagationMsgDescriptor();
+    virtual ~WritePropagationMsgDescriptor();
 
     virtual bool doesSupport(omnetpp::cObject *obj) const override;
     virtual const char **getPropertyNames() const override;
@@ -2651,24 +2922,24 @@ class UpdateMsgDescriptor : public omnetpp::cClassDescriptor
     virtual void setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const override;
 };
 
-Register_ClassDescriptor(UpdateMsgDescriptor)
+Register_ClassDescriptor(WritePropagationMsgDescriptor)
 
-UpdateMsgDescriptor::UpdateMsgDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(UpdateMsg)), "NetworkMsg")
+WritePropagationMsgDescriptor::WritePropagationMsgDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(WritePropagationMsg)), "NetworkMsg")
 {
     propertyNames = nullptr;
 }
 
-UpdateMsgDescriptor::~UpdateMsgDescriptor()
+WritePropagationMsgDescriptor::~WritePropagationMsgDescriptor()
 {
     delete[] propertyNames;
 }
 
-bool UpdateMsgDescriptor::doesSupport(omnetpp::cObject *obj) const
+bool WritePropagationMsgDescriptor::doesSupport(omnetpp::cObject *obj) const
 {
-    return dynamic_cast<UpdateMsg *>(obj)!=nullptr;
+    return dynamic_cast<WritePropagationMsg *>(obj)!=nullptr;
 }
 
-const char **UpdateMsgDescriptor::getPropertyNames() const
+const char **WritePropagationMsgDescriptor::getPropertyNames() const
 {
     if (!propertyNames) {
         static const char *names[] = {  nullptr };
@@ -2679,19 +2950,19 @@ const char **UpdateMsgDescriptor::getPropertyNames() const
     return propertyNames;
 }
 
-const char *UpdateMsgDescriptor::getProperty(const char *propertyName) const
+const char *WritePropagationMsgDescriptor::getProperty(const char *propertyName) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     return base ? base->getProperty(propertyName) : nullptr;
 }
 
-int UpdateMsgDescriptor::getFieldCount() const
+int WritePropagationMsgDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    return base ? 4+base->getFieldCount() : 4;
+    return base ? 3+base->getFieldCount() : 3;
 }
 
-unsigned int UpdateMsgDescriptor::getFieldTypeFlags(int field) const
+unsigned int WritePropagationMsgDescriptor::getFieldTypeFlags(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2700,15 +2971,14 @@ unsigned int UpdateMsgDescriptor::getFieldTypeFlags(int field) const
         field -= base->getFieldCount();
     }
     static unsigned int fieldTypeFlags[] = {
-        FD_ISEDITABLE,    // FIELD_updateId
         FD_ISEDITABLE,    // FIELD_key
         FD_ISEDITABLE,    // FIELD_value
         FD_ISCOMPOUND,    // FIELD_vectorClock
     };
-    return (field >= 0 && field < 4) ? fieldTypeFlags[field] : 0;
+    return (field >= 0 && field < 3) ? fieldTypeFlags[field] : 0;
 }
 
-const char *UpdateMsgDescriptor::getFieldName(int field) const
+const char *WritePropagationMsgDescriptor::getFieldName(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2717,26 +2987,24 @@ const char *UpdateMsgDescriptor::getFieldName(int field) const
         field -= base->getFieldCount();
     }
     static const char *fieldNames[] = {
-        "updateId",
         "key",
         "value",
         "vectorClock",
     };
-    return (field >= 0 && field < 4) ? fieldNames[field] : nullptr;
+    return (field >= 0 && field < 3) ? fieldNames[field] : nullptr;
 }
 
-int UpdateMsgDescriptor::findField(const char *fieldName) const
+int WritePropagationMsgDescriptor::findField(const char *fieldName) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     int baseIndex = base ? base->getFieldCount() : 0;
-    if (strcmp(fieldName, "updateId") == 0) return baseIndex + 0;
-    if (strcmp(fieldName, "key") == 0) return baseIndex + 1;
-    if (strcmp(fieldName, "value") == 0) return baseIndex + 2;
-    if (strcmp(fieldName, "vectorClock") == 0) return baseIndex + 3;
+    if (strcmp(fieldName, "key") == 0) return baseIndex + 0;
+    if (strcmp(fieldName, "value") == 0) return baseIndex + 1;
+    if (strcmp(fieldName, "vectorClock") == 0) return baseIndex + 2;
     return base ? base->findField(fieldName) : -1;
 }
 
-const char *UpdateMsgDescriptor::getFieldTypeString(int field) const
+const char *WritePropagationMsgDescriptor::getFieldTypeString(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2745,15 +3013,14 @@ const char *UpdateMsgDescriptor::getFieldTypeString(int field) const
         field -= base->getFieldCount();
     }
     static const char *fieldTypeStrings[] = {
-        "int",    // FIELD_updateId
         "string",    // FIELD_key
         "int",    // FIELD_value
         "VectorClock",    // FIELD_vectorClock
     };
-    return (field >= 0 && field < 4) ? fieldTypeStrings[field] : nullptr;
+    return (field >= 0 && field < 3) ? fieldTypeStrings[field] : nullptr;
 }
 
-const char **UpdateMsgDescriptor::getFieldPropertyNames(int field) const
+const char **WritePropagationMsgDescriptor::getFieldPropertyNames(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2766,7 +3033,7 @@ const char **UpdateMsgDescriptor::getFieldPropertyNames(int field) const
     }
 }
 
-const char *UpdateMsgDescriptor::getFieldProperty(int field, const char *propertyName) const
+const char *WritePropagationMsgDescriptor::getFieldProperty(int field, const char *propertyName) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2779,7 +3046,7 @@ const char *UpdateMsgDescriptor::getFieldProperty(int field, const char *propert
     }
 }
 
-int UpdateMsgDescriptor::getFieldArraySize(omnetpp::any_ptr object, int field) const
+int WritePropagationMsgDescriptor::getFieldArraySize(omnetpp::any_ptr object, int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2787,13 +3054,13 @@ int UpdateMsgDescriptor::getFieldArraySize(omnetpp::any_ptr object, int field) c
             return base->getFieldArraySize(object, field);
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
         default: return 0;
     }
 }
 
-void UpdateMsgDescriptor::setFieldArraySize(omnetpp::any_ptr object, int field, int size) const
+void WritePropagationMsgDescriptor::setFieldArraySize(omnetpp::any_ptr object, int field, int size) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2803,13 +3070,13 @@ void UpdateMsgDescriptor::setFieldArraySize(omnetpp::any_ptr object, int field, 
         }
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
-        default: throw omnetpp::cRuntimeError("Cannot set array size of field %d of class 'UpdateMsg'", field);
+        default: throw omnetpp::cRuntimeError("Cannot set array size of field %d of class 'WritePropagationMsg'", field);
     }
 }
 
-const char *UpdateMsgDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const
+const char *WritePropagationMsgDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2817,13 +3084,13 @@ const char *UpdateMsgDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr obje
             return base->getFieldDynamicTypeString(object,field,i);
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
         default: return nullptr;
     }
 }
 
-std::string UpdateMsgDescriptor::getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const
+std::string WritePropagationMsgDescriptor::getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2831,9 +3098,8 @@ std::string UpdateMsgDescriptor::getFieldValueAsString(omnetpp::any_ptr object, 
             return base->getFieldValueAsString(object,field,i);
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
-        case FIELD_updateId: return long2string(pp->getUpdateId());
         case FIELD_key: return oppstring2string(pp->getKey());
         case FIELD_value: return long2string(pp->getValue());
         case FIELD_vectorClock: return "";
@@ -2841,7 +3107,7 @@ std::string UpdateMsgDescriptor::getFieldValueAsString(omnetpp::any_ptr object, 
     }
 }
 
-void UpdateMsgDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const
+void WritePropagationMsgDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2851,16 +3117,15 @@ void UpdateMsgDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int fie
         }
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
-        case FIELD_updateId: pp->setUpdateId(string2long(value)); break;
         case FIELD_key: pp->setKey((value)); break;
         case FIELD_value: pp->setValue(string2long(value)); break;
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'UpdateMsg'", field);
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'WritePropagationMsg'", field);
     }
 }
 
-omnetpp::cValue UpdateMsgDescriptor::getFieldValue(omnetpp::any_ptr object, int field, int i) const
+omnetpp::cValue WritePropagationMsgDescriptor::getFieldValue(omnetpp::any_ptr object, int field, int i) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2868,17 +3133,16 @@ omnetpp::cValue UpdateMsgDescriptor::getFieldValue(omnetpp::any_ptr object, int 
             return base->getFieldValue(object,field,i);
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
-        case FIELD_updateId: return pp->getUpdateId();
         case FIELD_key: return pp->getKey();
         case FIELD_value: return pp->getValue();
         case FIELD_vectorClock: return omnetpp::toAnyPtr(&pp->getVectorClock()); break;
-        default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'UpdateMsg' as cValue -- field index out of range?", field);
+        default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'WritePropagationMsg' as cValue -- field index out of range?", field);
     }
 }
 
-void UpdateMsgDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const
+void WritePropagationMsgDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2888,16 +3152,15 @@ void UpdateMsgDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int 
         }
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
-        case FIELD_updateId: pp->setUpdateId(omnetpp::checked_int_cast<int>(value.intValue())); break;
         case FIELD_key: pp->setKey(value.stringValue()); break;
         case FIELD_value: pp->setValue(omnetpp::checked_int_cast<int>(value.intValue())); break;
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'UpdateMsg'", field);
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'WritePropagationMsg'", field);
     }
 }
 
-const char *UpdateMsgDescriptor::getFieldStructName(int field) const
+const char *WritePropagationMsgDescriptor::getFieldStructName(int field) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2911,7 +3174,7 @@ const char *UpdateMsgDescriptor::getFieldStructName(int field) const
     };
 }
 
-omnetpp::any_ptr UpdateMsgDescriptor::getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const
+omnetpp::any_ptr WritePropagationMsgDescriptor::getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2919,14 +3182,14 @@ omnetpp::any_ptr UpdateMsgDescriptor::getFieldStructValuePointer(omnetpp::any_pt
             return base->getFieldStructValuePointer(object, field, i);
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
         case FIELD_vectorClock: return omnetpp::toAnyPtr(&pp->getVectorClock()); break;
         default: return omnetpp::any_ptr(nullptr);
     }
 }
 
-void UpdateMsgDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const
+void WritePropagationMsgDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     if (base) {
@@ -2936,361 +3199,9 @@ void UpdateMsgDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, in
         }
         field -= base->getFieldCount();
     }
-    UpdateMsg *pp = omnetpp::fromAnyPtr<UpdateMsg>(object); (void)pp;
+    WritePropagationMsg *pp = omnetpp::fromAnyPtr<WritePropagationMsg>(object); (void)pp;
     switch (field) {
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'UpdateMsg'", field);
-    }
-}
-
-Register_Class(UpdateAckMsg)
-
-UpdateAckMsg::UpdateAckMsg(const char *name, short kind) : ::NetworkMsg(name, kind)
-{
-}
-
-UpdateAckMsg::UpdateAckMsg(const UpdateAckMsg& other) : ::NetworkMsg(other)
-{
-    copy(other);
-}
-
-UpdateAckMsg::~UpdateAckMsg()
-{
-}
-
-UpdateAckMsg& UpdateAckMsg::operator=(const UpdateAckMsg& other)
-{
-    if (this == &other) return *this;
-    ::NetworkMsg::operator=(other);
-    copy(other);
-    return *this;
-}
-
-void UpdateAckMsg::copy(const UpdateAckMsg& other)
-{
-    this->updateId = other.updateId;
-}
-
-void UpdateAckMsg::parsimPack(omnetpp::cCommBuffer *b) const
-{
-    ::NetworkMsg::parsimPack(b);
-    doParsimPacking(b,this->updateId);
-}
-
-void UpdateAckMsg::parsimUnpack(omnetpp::cCommBuffer *b)
-{
-    ::NetworkMsg::parsimUnpack(b);
-    doParsimUnpacking(b,this->updateId);
-}
-
-int UpdateAckMsg::getUpdateId() const
-{
-    return this->updateId;
-}
-
-void UpdateAckMsg::setUpdateId(int updateId)
-{
-    this->updateId = updateId;
-}
-
-class UpdateAckMsgDescriptor : public omnetpp::cClassDescriptor
-{
-  private:
-    mutable const char **propertyNames;
-    enum FieldConstants {
-        FIELD_updateId,
-    };
-  public:
-    UpdateAckMsgDescriptor();
-    virtual ~UpdateAckMsgDescriptor();
-
-    virtual bool doesSupport(omnetpp::cObject *obj) const override;
-    virtual const char **getPropertyNames() const override;
-    virtual const char *getProperty(const char *propertyName) const override;
-    virtual int getFieldCount() const override;
-    virtual const char *getFieldName(int field) const override;
-    virtual int findField(const char *fieldName) const override;
-    virtual unsigned int getFieldTypeFlags(int field) const override;
-    virtual const char *getFieldTypeString(int field) const override;
-    virtual const char **getFieldPropertyNames(int field) const override;
-    virtual const char *getFieldProperty(int field, const char *propertyName) const override;
-    virtual int getFieldArraySize(omnetpp::any_ptr object, int field) const override;
-    virtual void setFieldArraySize(omnetpp::any_ptr object, int field, int size) const override;
-
-    virtual const char *getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const override;
-    virtual std::string getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const override;
-    virtual void setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const override;
-    virtual omnetpp::cValue getFieldValue(omnetpp::any_ptr object, int field, int i) const override;
-    virtual void setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const override;
-
-    virtual const char *getFieldStructName(int field) const override;
-    virtual omnetpp::any_ptr getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const override;
-    virtual void setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const override;
-};
-
-Register_ClassDescriptor(UpdateAckMsgDescriptor)
-
-UpdateAckMsgDescriptor::UpdateAckMsgDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(UpdateAckMsg)), "NetworkMsg")
-{
-    propertyNames = nullptr;
-}
-
-UpdateAckMsgDescriptor::~UpdateAckMsgDescriptor()
-{
-    delete[] propertyNames;
-}
-
-bool UpdateAckMsgDescriptor::doesSupport(omnetpp::cObject *obj) const
-{
-    return dynamic_cast<UpdateAckMsg *>(obj)!=nullptr;
-}
-
-const char **UpdateAckMsgDescriptor::getPropertyNames() const
-{
-    if (!propertyNames) {
-        static const char *names[] = {  nullptr };
-        omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-        const char **baseNames = base ? base->getPropertyNames() : nullptr;
-        propertyNames = mergeLists(baseNames, names);
-    }
-    return propertyNames;
-}
-
-const char *UpdateAckMsgDescriptor::getProperty(const char *propertyName) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    return base ? base->getProperty(propertyName) : nullptr;
-}
-
-int UpdateAckMsgDescriptor::getFieldCount() const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    return base ? 1+base->getFieldCount() : 1;
-}
-
-unsigned int UpdateAckMsgDescriptor::getFieldTypeFlags(int field) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldTypeFlags(field);
-        field -= base->getFieldCount();
-    }
-    static unsigned int fieldTypeFlags[] = {
-        FD_ISEDITABLE,    // FIELD_updateId
-    };
-    return (field >= 0 && field < 1) ? fieldTypeFlags[field] : 0;
-}
-
-const char *UpdateAckMsgDescriptor::getFieldName(int field) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldName(field);
-        field -= base->getFieldCount();
-    }
-    static const char *fieldNames[] = {
-        "updateId",
-    };
-    return (field >= 0 && field < 1) ? fieldNames[field] : nullptr;
-}
-
-int UpdateAckMsgDescriptor::findField(const char *fieldName) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    int baseIndex = base ? base->getFieldCount() : 0;
-    if (strcmp(fieldName, "updateId") == 0) return baseIndex + 0;
-    return base ? base->findField(fieldName) : -1;
-}
-
-const char *UpdateAckMsgDescriptor::getFieldTypeString(int field) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldTypeString(field);
-        field -= base->getFieldCount();
-    }
-    static const char *fieldTypeStrings[] = {
-        "int",    // FIELD_updateId
-    };
-    return (field >= 0 && field < 1) ? fieldTypeStrings[field] : nullptr;
-}
-
-const char **UpdateAckMsgDescriptor::getFieldPropertyNames(int field) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldPropertyNames(field);
-        field -= base->getFieldCount();
-    }
-    switch (field) {
-        default: return nullptr;
-    }
-}
-
-const char *UpdateAckMsgDescriptor::getFieldProperty(int field, const char *propertyName) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldProperty(field, propertyName);
-        field -= base->getFieldCount();
-    }
-    switch (field) {
-        default: return nullptr;
-    }
-}
-
-int UpdateAckMsgDescriptor::getFieldArraySize(omnetpp::any_ptr object, int field) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldArraySize(object, field);
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        default: return 0;
-    }
-}
-
-void UpdateAckMsgDescriptor::setFieldArraySize(omnetpp::any_ptr object, int field, int size) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount()){
-            base->setFieldArraySize(object, field, size);
-            return;
-        }
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        default: throw omnetpp::cRuntimeError("Cannot set array size of field %d of class 'UpdateAckMsg'", field);
-    }
-}
-
-const char *UpdateAckMsgDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldDynamicTypeString(object,field,i);
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        default: return nullptr;
-    }
-}
-
-std::string UpdateAckMsgDescriptor::getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldValueAsString(object,field,i);
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        case FIELD_updateId: return long2string(pp->getUpdateId());
-        default: return "";
-    }
-}
-
-void UpdateAckMsgDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount()){
-            base->setFieldValueAsString(object, field, i, value);
-            return;
-        }
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        case FIELD_updateId: pp->setUpdateId(string2long(value)); break;
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'UpdateAckMsg'", field);
-    }
-}
-
-omnetpp::cValue UpdateAckMsgDescriptor::getFieldValue(omnetpp::any_ptr object, int field, int i) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldValue(object,field,i);
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        case FIELD_updateId: return pp->getUpdateId();
-        default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'UpdateAckMsg' as cValue -- field index out of range?", field);
-    }
-}
-
-void UpdateAckMsgDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount()){
-            base->setFieldValue(object, field, i, value);
-            return;
-        }
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        case FIELD_updateId: pp->setUpdateId(omnetpp::checked_int_cast<int>(value.intValue())); break;
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'UpdateAckMsg'", field);
-    }
-}
-
-const char *UpdateAckMsgDescriptor::getFieldStructName(int field) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldStructName(field);
-        field -= base->getFieldCount();
-    }
-    switch (field) {
-        default: return nullptr;
-    };
-}
-
-omnetpp::any_ptr UpdateAckMsgDescriptor::getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount())
-            return base->getFieldStructValuePointer(object, field, i);
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        default: return omnetpp::any_ptr(nullptr);
-    }
-}
-
-void UpdateAckMsgDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const
-{
-    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    if (base) {
-        if (field < base->getFieldCount()){
-            base->setFieldStructValuePointer(object, field, i, ptr);
-            return;
-        }
-        field -= base->getFieldCount();
-    }
-    UpdateAckMsg *pp = omnetpp::fromAnyPtr<UpdateAckMsg>(object); (void)pp;
-    switch (field) {
-        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'UpdateAckMsg'", field);
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'WritePropagationMsg'", field);
     }
 }
 
@@ -3334,12 +3245,12 @@ void HeartbeatMsg::parsimUnpack(omnetpp::cCommBuffer *b)
     doParsimUnpacking(b,this->timestamp);
 }
 
-int HeartbeatMsg::getTimestamp() const
+omnetpp::simtime_t HeartbeatMsg::getTimestamp() const
 {
     return this->timestamp;
 }
 
-void HeartbeatMsg::setTimestamp(int timestamp)
+void HeartbeatMsg::setTimestamp(omnetpp::simtime_t timestamp)
 {
     this->timestamp = timestamp;
 }
@@ -3464,7 +3375,7 @@ const char *HeartbeatMsgDescriptor::getFieldTypeString(int field) const
         field -= base->getFieldCount();
     }
     static const char *fieldTypeStrings[] = {
-        "int",    // FIELD_timestamp
+        "omnetpp::simtime_t",    // FIELD_timestamp
     };
     return (field >= 0 && field < 1) ? fieldTypeStrings[field] : nullptr;
 }
@@ -3549,7 +3460,7 @@ std::string HeartbeatMsgDescriptor::getFieldValueAsString(omnetpp::any_ptr objec
     }
     HeartbeatMsg *pp = omnetpp::fromAnyPtr<HeartbeatMsg>(object); (void)pp;
     switch (field) {
-        case FIELD_timestamp: return long2string(pp->getTimestamp());
+        case FIELD_timestamp: return simtime2string(pp->getTimestamp());
         default: return "";
     }
 }
@@ -3566,7 +3477,7 @@ void HeartbeatMsgDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int 
     }
     HeartbeatMsg *pp = omnetpp::fromAnyPtr<HeartbeatMsg>(object); (void)pp;
     switch (field) {
-        case FIELD_timestamp: pp->setTimestamp(string2long(value)); break;
+        case FIELD_timestamp: pp->setTimestamp(string2simtime(value)); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'HeartbeatMsg'", field);
     }
 }
@@ -3581,7 +3492,7 @@ omnetpp::cValue HeartbeatMsgDescriptor::getFieldValue(omnetpp::any_ptr object, i
     }
     HeartbeatMsg *pp = omnetpp::fromAnyPtr<HeartbeatMsg>(object); (void)pp;
     switch (field) {
-        case FIELD_timestamp: return pp->getTimestamp();
+        case FIELD_timestamp: return pp->getTimestamp().dbl();
         default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'HeartbeatMsg' as cValue -- field index out of range?", field);
     }
 }
@@ -3598,7 +3509,7 @@ void HeartbeatMsgDescriptor::setFieldValue(omnetpp::any_ptr object, int field, i
     }
     HeartbeatMsg *pp = omnetpp::fromAnyPtr<HeartbeatMsg>(object); (void)pp;
     switch (field) {
-        case FIELD_timestamp: pp->setTimestamp(omnetpp::checked_int_cast<int>(value.intValue())); break;
+        case FIELD_timestamp: pp->setTimestamp(value.doubleValue()); break;
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'HeartbeatMsg'", field);
     }
 }
@@ -3643,6 +3554,358 @@ void HeartbeatMsgDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object,
     HeartbeatMsg *pp = omnetpp::fromAnyPtr<HeartbeatMsg>(object); (void)pp;
     switch (field) {
         default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'HeartbeatMsg'", field);
+    }
+}
+
+Register_Class(MissingWritesRequestMsg)
+
+MissingWritesRequestMsg::MissingWritesRequestMsg(const char *name, short kind) : ::NetworkMsg(name, kind)
+{
+}
+
+MissingWritesRequestMsg::MissingWritesRequestMsg(const MissingWritesRequestMsg& other) : ::NetworkMsg(other)
+{
+    copy(other);
+}
+
+MissingWritesRequestMsg::~MissingWritesRequestMsg()
+{
+}
+
+MissingWritesRequestMsg& MissingWritesRequestMsg::operator=(const MissingWritesRequestMsg& other)
+{
+    if (this == &other) return *this;
+    ::NetworkMsg::operator=(other);
+    copy(other);
+    return *this;
+}
+
+void MissingWritesRequestMsg::copy(const MissingWritesRequestMsg& other)
+{
+    this->missingWrites = other.missingWrites;
+}
+
+void MissingWritesRequestMsg::parsimPack(omnetpp::cCommBuffer *b) const
+{
+    ::NetworkMsg::parsimPack(b);
+    doParsimPacking(b,this->missingWrites);
+}
+
+void MissingWritesRequestMsg::parsimUnpack(omnetpp::cCommBuffer *b)
+{
+    ::NetworkMsg::parsimUnpack(b);
+    doParsimUnpacking(b,this->missingWrites);
+}
+
+const Writes& MissingWritesRequestMsg::getMissingWrites() const
+{
+    return this->missingWrites;
+}
+
+void MissingWritesRequestMsg::setMissingWrites(const Writes& missingWrites)
+{
+    this->missingWrites = missingWrites;
+}
+
+class MissingWritesRequestMsgDescriptor : public omnetpp::cClassDescriptor
+{
+  private:
+    mutable const char **propertyNames;
+    enum FieldConstants {
+        FIELD_missingWrites,
+    };
+  public:
+    MissingWritesRequestMsgDescriptor();
+    virtual ~MissingWritesRequestMsgDescriptor();
+
+    virtual bool doesSupport(omnetpp::cObject *obj) const override;
+    virtual const char **getPropertyNames() const override;
+    virtual const char *getProperty(const char *propertyName) const override;
+    virtual int getFieldCount() const override;
+    virtual const char *getFieldName(int field) const override;
+    virtual int findField(const char *fieldName) const override;
+    virtual unsigned int getFieldTypeFlags(int field) const override;
+    virtual const char *getFieldTypeString(int field) const override;
+    virtual const char **getFieldPropertyNames(int field) const override;
+    virtual const char *getFieldProperty(int field, const char *propertyName) const override;
+    virtual int getFieldArraySize(omnetpp::any_ptr object, int field) const override;
+    virtual void setFieldArraySize(omnetpp::any_ptr object, int field, int size) const override;
+
+    virtual const char *getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const override;
+    virtual std::string getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const override;
+    virtual void setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const override;
+    virtual omnetpp::cValue getFieldValue(omnetpp::any_ptr object, int field, int i) const override;
+    virtual void setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const override;
+
+    virtual const char *getFieldStructName(int field) const override;
+    virtual omnetpp::any_ptr getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const override;
+    virtual void setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const override;
+};
+
+Register_ClassDescriptor(MissingWritesRequestMsgDescriptor)
+
+MissingWritesRequestMsgDescriptor::MissingWritesRequestMsgDescriptor() : omnetpp::cClassDescriptor(omnetpp::opp_typename(typeid(MissingWritesRequestMsg)), "NetworkMsg")
+{
+    propertyNames = nullptr;
+}
+
+MissingWritesRequestMsgDescriptor::~MissingWritesRequestMsgDescriptor()
+{
+    delete[] propertyNames;
+}
+
+bool MissingWritesRequestMsgDescriptor::doesSupport(omnetpp::cObject *obj) const
+{
+    return dynamic_cast<MissingWritesRequestMsg *>(obj)!=nullptr;
+}
+
+const char **MissingWritesRequestMsgDescriptor::getPropertyNames() const
+{
+    if (!propertyNames) {
+        static const char *names[] = {  nullptr };
+        omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+        const char **baseNames = base ? base->getPropertyNames() : nullptr;
+        propertyNames = mergeLists(baseNames, names);
+    }
+    return propertyNames;
+}
+
+const char *MissingWritesRequestMsgDescriptor::getProperty(const char *propertyName) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    return base ? base->getProperty(propertyName) : nullptr;
+}
+
+int MissingWritesRequestMsgDescriptor::getFieldCount() const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    return base ? 1+base->getFieldCount() : 1;
+}
+
+unsigned int MissingWritesRequestMsgDescriptor::getFieldTypeFlags(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldTypeFlags(field);
+        field -= base->getFieldCount();
+    }
+    static unsigned int fieldTypeFlags[] = {
+        FD_ISCOMPOUND,    // FIELD_missingWrites
+    };
+    return (field >= 0 && field < 1) ? fieldTypeFlags[field] : 0;
+}
+
+const char *MissingWritesRequestMsgDescriptor::getFieldName(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldName(field);
+        field -= base->getFieldCount();
+    }
+    static const char *fieldNames[] = {
+        "missingWrites",
+    };
+    return (field >= 0 && field < 1) ? fieldNames[field] : nullptr;
+}
+
+int MissingWritesRequestMsgDescriptor::findField(const char *fieldName) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    int baseIndex = base ? base->getFieldCount() : 0;
+    if (strcmp(fieldName, "missingWrites") == 0) return baseIndex + 0;
+    return base ? base->findField(fieldName) : -1;
+}
+
+const char *MissingWritesRequestMsgDescriptor::getFieldTypeString(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldTypeString(field);
+        field -= base->getFieldCount();
+    }
+    static const char *fieldTypeStrings[] = {
+        "Writes",    // FIELD_missingWrites
+    };
+    return (field >= 0 && field < 1) ? fieldTypeStrings[field] : nullptr;
+}
+
+const char **MissingWritesRequestMsgDescriptor::getFieldPropertyNames(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldPropertyNames(field);
+        field -= base->getFieldCount();
+    }
+    switch (field) {
+        default: return nullptr;
+    }
+}
+
+const char *MissingWritesRequestMsgDescriptor::getFieldProperty(int field, const char *propertyName) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldProperty(field, propertyName);
+        field -= base->getFieldCount();
+    }
+    switch (field) {
+        default: return nullptr;
+    }
+}
+
+int MissingWritesRequestMsgDescriptor::getFieldArraySize(omnetpp::any_ptr object, int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldArraySize(object, field);
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        default: return 0;
+    }
+}
+
+void MissingWritesRequestMsgDescriptor::setFieldArraySize(omnetpp::any_ptr object, int field, int size) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount()){
+            base->setFieldArraySize(object, field, size);
+            return;
+        }
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot set array size of field %d of class 'MissingWritesRequestMsg'", field);
+    }
+}
+
+const char *MissingWritesRequestMsgDescriptor::getFieldDynamicTypeString(omnetpp::any_ptr object, int field, int i) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldDynamicTypeString(object,field,i);
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        default: return nullptr;
+    }
+}
+
+std::string MissingWritesRequestMsgDescriptor::getFieldValueAsString(omnetpp::any_ptr object, int field, int i) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldValueAsString(object,field,i);
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        case FIELD_missingWrites: return "";
+        default: return "";
+    }
+}
+
+void MissingWritesRequestMsgDescriptor::setFieldValueAsString(omnetpp::any_ptr object, int field, int i, const char *value) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount()){
+            base->setFieldValueAsString(object, field, i, value);
+            return;
+        }
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'MissingWritesRequestMsg'", field);
+    }
+}
+
+omnetpp::cValue MissingWritesRequestMsgDescriptor::getFieldValue(omnetpp::any_ptr object, int field, int i) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldValue(object,field,i);
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        case FIELD_missingWrites: return omnetpp::toAnyPtr(&pp->getMissingWrites()); break;
+        default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'MissingWritesRequestMsg' as cValue -- field index out of range?", field);
+    }
+}
+
+void MissingWritesRequestMsgDescriptor::setFieldValue(omnetpp::any_ptr object, int field, int i, const omnetpp::cValue& value) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount()){
+            base->setFieldValue(object, field, i, value);
+            return;
+        }
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'MissingWritesRequestMsg'", field);
+    }
+}
+
+const char *MissingWritesRequestMsgDescriptor::getFieldStructName(int field) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldStructName(field);
+        field -= base->getFieldCount();
+    }
+    switch (field) {
+        case FIELD_missingWrites: return omnetpp::opp_typename(typeid(Writes));
+        default: return nullptr;
+    };
+}
+
+omnetpp::any_ptr MissingWritesRequestMsgDescriptor::getFieldStructValuePointer(omnetpp::any_ptr object, int field, int i) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount())
+            return base->getFieldStructValuePointer(object, field, i);
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        case FIELD_missingWrites: return omnetpp::toAnyPtr(&pp->getMissingWrites()); break;
+        default: return omnetpp::any_ptr(nullptr);
+    }
+}
+
+void MissingWritesRequestMsgDescriptor::setFieldStructValuePointer(omnetpp::any_ptr object, int field, int i, omnetpp::any_ptr ptr) const
+{
+    omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
+    if (base) {
+        if (field < base->getFieldCount()){
+            base->setFieldStructValuePointer(object, field, i, ptr);
+            return;
+        }
+        field -= base->getFieldCount();
+    }
+    MissingWritesRequestMsg *pp = omnetpp::fromAnyPtr<MissingWritesRequestMsg>(object); (void)pp;
+    switch (field) {
+        default: throw omnetpp::cRuntimeError("Cannot set field %d of class 'MissingWritesRequestMsg'", field);
     }
 }
 

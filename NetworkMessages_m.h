@@ -21,18 +21,20 @@ class ReadRequestMsg;
 class ReadResponseMsg;
 class WriteRequestMsg;
 class WriteResponseMsg;
-class UpdateMsg;
-class UpdateAckMsg;
+class WritePropagationMsg;
 class HeartbeatMsg;
+class MissingWritesRequestMsg;
 // cplusplus {{
 #include <map>
+#include <set>
 #include <string>
 typedef std::map<int, int> VectorClock;
 typedef std::map<std::string, int> Store;
+typedef std::map<int, std::set<int>> Writes;
 // }}
 
 /**
- * Class generated from <tt>NetworkMessages.msg:26</tt> by opp_msgtool.
+ * Class generated from <tt>NetworkMessages.msg:29</tt> by opp_msgtool.
  * <pre>
  * message NetworkMsg
  * {
@@ -68,7 +70,7 @@ inline void doParsimPacking(omnetpp::cCommBuffer *b, const NetworkMsg& obj) {obj
 inline void doParsimUnpacking(omnetpp::cCommBuffer *b, NetworkMsg& obj) {obj.parsimUnpack(b);}
 
 /**
- * Class generated from <tt>NetworkMessages.msg:30</tt> by opp_msgtool.
+ * Class generated from <tt>NetworkMessages.msg:33</tt> by opp_msgtool.
  * <pre>
  * message ReadRequestMsg extends NetworkMsg
  * {
@@ -104,7 +106,7 @@ inline void doParsimPacking(omnetpp::cCommBuffer *b, const ReadRequestMsg& obj) 
 inline void doParsimUnpacking(omnetpp::cCommBuffer *b, ReadRequestMsg& obj) {obj.parsimUnpack(b);}
 
 /**
- * Class generated from <tt>NetworkMessages.msg:34</tt> by opp_msgtool.
+ * Class generated from <tt>NetworkMessages.msg:37</tt> by opp_msgtool.
  * <pre>
  * message ReadResponseMsg extends NetworkMsg
  * {
@@ -145,7 +147,7 @@ inline void doParsimPacking(omnetpp::cCommBuffer *b, const ReadResponseMsg& obj)
 inline void doParsimUnpacking(omnetpp::cCommBuffer *b, ReadResponseMsg& obj) {obj.parsimUnpack(b);}
 
 /**
- * Class generated from <tt>NetworkMessages.msg:39</tt> by opp_msgtool.
+ * Class generated from <tt>NetworkMessages.msg:42</tt> by opp_msgtool.
  * <pre>
  * message WriteRequestMsg extends NetworkMsg
  * {
@@ -186,7 +188,7 @@ inline void doParsimPacking(omnetpp::cCommBuffer *b, const WriteRequestMsg& obj)
 inline void doParsimUnpacking(omnetpp::cCommBuffer *b, WriteRequestMsg& obj) {obj.parsimUnpack(b);}
 
 /**
- * Class generated from <tt>NetworkMessages.msg:44</tt> by opp_msgtool.
+ * Class generated from <tt>NetworkMessages.msg:47</tt> by opp_msgtool.
  * <pre>
  * message WriteResponseMsg extends NetworkMsg
  * {
@@ -222,42 +224,37 @@ inline void doParsimPacking(omnetpp::cCommBuffer *b, const WriteResponseMsg& obj
 inline void doParsimUnpacking(omnetpp::cCommBuffer *b, WriteResponseMsg& obj) {obj.parsimUnpack(b);}
 
 /**
- * Class generated from <tt>NetworkMessages.msg:48</tt> by opp_msgtool.
+ * Class generated from <tt>NetworkMessages.msg:51</tt> by opp_msgtool.
  * <pre>
- * message UpdateMsg extends NetworkMsg
+ * message WritePropagationMsg extends NetworkMsg
  * {
- *     int updateId;
  *     string key;
  *     int value;
  *     VectorClock vectorClock;
  * }
  * </pre>
  */
-class UpdateMsg : public ::NetworkMsg
+class WritePropagationMsg : public ::NetworkMsg
 {
   protected:
-    int updateId = 0;
     omnetpp::opp_string key;
     int value = 0;
     VectorClock vectorClock;
 
   private:
-    void copy(const UpdateMsg& other);
+    void copy(const WritePropagationMsg& other);
 
   protected:
-    bool operator==(const UpdateMsg&) = delete;
+    bool operator==(const WritePropagationMsg&) = delete;
 
   public:
-    UpdateMsg(const char *name=nullptr, short kind=0);
-    UpdateMsg(const UpdateMsg& other);
-    virtual ~UpdateMsg();
-    UpdateMsg& operator=(const UpdateMsg& other);
-    virtual UpdateMsg *dup() const override {return new UpdateMsg(*this);}
+    WritePropagationMsg(const char *name=nullptr, short kind=0);
+    WritePropagationMsg(const WritePropagationMsg& other);
+    virtual ~WritePropagationMsg();
+    WritePropagationMsg& operator=(const WritePropagationMsg& other);
+    virtual WritePropagationMsg *dup() const override {return new WritePropagationMsg(*this);}
     virtual void parsimPack(omnetpp::cCommBuffer *b) const override;
     virtual void parsimUnpack(omnetpp::cCommBuffer *b) override;
-
-    virtual int getUpdateId() const;
-    virtual void setUpdateId(int updateId);
 
     virtual const char * getKey() const;
     virtual void setKey(const char * key);
@@ -266,62 +263,26 @@ class UpdateMsg : public ::NetworkMsg
     virtual void setValue(int value);
 
     virtual const VectorClock& getVectorClock() const;
-    virtual VectorClock& getVectorClockForUpdate() { return const_cast<VectorClock&>(const_cast<UpdateMsg*>(this)->getVectorClock());}
+    virtual VectorClock& getVectorClockForUpdate() { return const_cast<VectorClock&>(const_cast<WritePropagationMsg*>(this)->getVectorClock());}
     virtual void setVectorClock(const VectorClock& vectorClock);
 };
 
-inline void doParsimPacking(omnetpp::cCommBuffer *b, const UpdateMsg& obj) {obj.parsimPack(b);}
-inline void doParsimUnpacking(omnetpp::cCommBuffer *b, UpdateMsg& obj) {obj.parsimUnpack(b);}
+inline void doParsimPacking(omnetpp::cCommBuffer *b, const WritePropagationMsg& obj) {obj.parsimPack(b);}
+inline void doParsimUnpacking(omnetpp::cCommBuffer *b, WritePropagationMsg& obj) {obj.parsimUnpack(b);}
 
 /**
- * Class generated from <tt>NetworkMessages.msg:55</tt> by opp_msgtool.
- * <pre>
- * message UpdateAckMsg extends NetworkMsg
- * {
- *     int updateId;
- * }
- * </pre>
- */
-class UpdateAckMsg : public ::NetworkMsg
-{
-  protected:
-    int updateId = 0;
-
-  private:
-    void copy(const UpdateAckMsg& other);
-
-  protected:
-    bool operator==(const UpdateAckMsg&) = delete;
-
-  public:
-    UpdateAckMsg(const char *name=nullptr, short kind=0);
-    UpdateAckMsg(const UpdateAckMsg& other);
-    virtual ~UpdateAckMsg();
-    UpdateAckMsg& operator=(const UpdateAckMsg& other);
-    virtual UpdateAckMsg *dup() const override {return new UpdateAckMsg(*this);}
-    virtual void parsimPack(omnetpp::cCommBuffer *b) const override;
-    virtual void parsimUnpack(omnetpp::cCommBuffer *b) override;
-
-    virtual int getUpdateId() const;
-    virtual void setUpdateId(int updateId);
-};
-
-inline void doParsimPacking(omnetpp::cCommBuffer *b, const UpdateAckMsg& obj) {obj.parsimPack(b);}
-inline void doParsimUnpacking(omnetpp::cCommBuffer *b, UpdateAckMsg& obj) {obj.parsimUnpack(b);}
-
-/**
- * Class generated from <tt>NetworkMessages.msg:59</tt> by opp_msgtool.
+ * Class generated from <tt>NetworkMessages.msg:57</tt> by opp_msgtool.
  * <pre>
  * message HeartbeatMsg extends NetworkMsg
  * {
- *     int timestamp;
+ *     simtime_t timestamp;
  * }
  * </pre>
  */
 class HeartbeatMsg : public ::NetworkMsg
 {
   protected:
-    int timestamp = 0;
+    omnetpp::simtime_t timestamp = SIMTIME_ZERO;
 
   private:
     void copy(const HeartbeatMsg& other);
@@ -338,12 +299,49 @@ class HeartbeatMsg : public ::NetworkMsg
     virtual void parsimPack(omnetpp::cCommBuffer *b) const override;
     virtual void parsimUnpack(omnetpp::cCommBuffer *b) override;
 
-    virtual int getTimestamp() const;
-    virtual void setTimestamp(int timestamp);
+    virtual omnetpp::simtime_t getTimestamp() const;
+    virtual void setTimestamp(omnetpp::simtime_t timestamp);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const HeartbeatMsg& obj) {obj.parsimPack(b);}
 inline void doParsimUnpacking(omnetpp::cCommBuffer *b, HeartbeatMsg& obj) {obj.parsimUnpack(b);}
+
+/**
+ * Class generated from <tt>NetworkMessages.msg:61</tt> by opp_msgtool.
+ * <pre>
+ * message MissingWritesRequestMsg extends NetworkMsg
+ * {
+ *     Writes missingWrites;
+ * }
+ * </pre>
+ */
+class MissingWritesRequestMsg : public ::NetworkMsg
+{
+  protected:
+    Writes missingWrites;
+
+  private:
+    void copy(const MissingWritesRequestMsg& other);
+
+  protected:
+    bool operator==(const MissingWritesRequestMsg&) = delete;
+
+  public:
+    MissingWritesRequestMsg(const char *name=nullptr, short kind=0);
+    MissingWritesRequestMsg(const MissingWritesRequestMsg& other);
+    virtual ~MissingWritesRequestMsg();
+    MissingWritesRequestMsg& operator=(const MissingWritesRequestMsg& other);
+    virtual MissingWritesRequestMsg *dup() const override {return new MissingWritesRequestMsg(*this);}
+    virtual void parsimPack(omnetpp::cCommBuffer *b) const override;
+    virtual void parsimUnpack(omnetpp::cCommBuffer *b) override;
+
+    virtual const Writes& getMissingWrites() const;
+    virtual Writes& getMissingWritesForUpdate() { return const_cast<Writes&>(const_cast<MissingWritesRequestMsg*>(this)->getMissingWrites());}
+    virtual void setMissingWrites(const Writes& missingWrites);
+};
+
+inline void doParsimPacking(omnetpp::cCommBuffer *b, const MissingWritesRequestMsg& obj) {obj.parsimPack(b);}
+inline void doParsimUnpacking(omnetpp::cCommBuffer *b, MissingWritesRequestMsg& obj) {obj.parsimUnpack(b);}
 
 
 namespace omnetpp {
@@ -352,14 +350,16 @@ inline any_ptr toAnyPtr(const VectorClock *p) {if (auto obj = as_cObject(p)) ret
 template<> inline VectorClock *fromAnyPtr(any_ptr ptr) { return ptr.get<VectorClock>(); }
 inline any_ptr toAnyPtr(const Store *p) {if (auto obj = as_cObject(p)) return any_ptr(obj); else return any_ptr(p);}
 template<> inline Store *fromAnyPtr(any_ptr ptr) { return ptr.get<Store>(); }
+inline any_ptr toAnyPtr(const Writes *p) {if (auto obj = as_cObject(p)) return any_ptr(obj); else return any_ptr(p);}
+template<> inline Writes *fromAnyPtr(any_ptr ptr) { return ptr.get<Writes>(); }
 template<> inline NetworkMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<NetworkMsg*>(ptr.get<cObject>()); }
 template<> inline ReadRequestMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<ReadRequestMsg*>(ptr.get<cObject>()); }
 template<> inline ReadResponseMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<ReadResponseMsg*>(ptr.get<cObject>()); }
 template<> inline WriteRequestMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<WriteRequestMsg*>(ptr.get<cObject>()); }
 template<> inline WriteResponseMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<WriteResponseMsg*>(ptr.get<cObject>()); }
-template<> inline UpdateMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<UpdateMsg*>(ptr.get<cObject>()); }
-template<> inline UpdateAckMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<UpdateAckMsg*>(ptr.get<cObject>()); }
+template<> inline WritePropagationMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<WritePropagationMsg*>(ptr.get<cObject>()); }
 template<> inline HeartbeatMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<HeartbeatMsg*>(ptr.get<cObject>()); }
+template<> inline MissingWritesRequestMsg *fromAnyPtr(any_ptr ptr) { return check_and_cast<MissingWritesRequestMsg*>(ptr.get<cObject>()); }
 
 }  // namespace omnetpp
 

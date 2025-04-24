@@ -16,32 +16,51 @@
 #include "DatastoreServer.h"
 
 DatastoreServer::DatastoreServer() {
-    heartbeatTimer =nullptr;
+    heartbeatTimer = nullptr;
 }
 
 DatastoreServer::~DatastoreServer() {
     cancelAndDelete(heartbeatTimer);
-    cancelAndDelete(retransmissionTimer);
 }
 
 void DatastoreServer::initialize(){
     serverId = par("serverId");
     totalServers = par("totalServers");
+    omissionFailureProbability = par("omissionFailureProbability").doubleValue();
 
     for(int i = 0; i < totalServers; i++)
         vectorClock[i] = 0;
 
-    updateIdCounter = 0;
-
-    EV << "Server[" << serverId << "] starting" << endl;
+    EV << "[SERVER-" << serverId << "] Starting" << endl;
 
     heartbeatTimer = new cMessage("heartbeatTimer");
     scheduleAt(simTime(), heartbeatTimer);
 
-    retransmissionTimer = new cMessage("retransmissionTimer");
-    scheduleAt(simTime() + par("retransmissionInterval").doubleValue(), retransmissionTimer);
-}
+    // Initialize lastKnownVectorClocks map
+    for(int i = 0; i < totalServers; i++){
+        std::map<int, int> map;
+        
+        // For all servers except this one, initialize the vector clock to 0
+        if(i == serverId){
+            map = vectorClock; //In this case, the map will be the same as the vector clock of this server
+        } else {
+            // For the other datastores, initialize the vector clock to 0 instead
+            for(int j = 0; j < totalServers; j++)
+                map[j] = 0;
+        }
 
+        lastKnownVectorClocks[i] = map; // Pointer to vector clock
+    }
+    
+    // Initialization of vector clock used for deleting updates applied by everyone
+    for(int i = 0; i < totalServers; i++){
+        prevMinVectorClock[i] = 0;
+    }
+
+    for(int i = 0; i < totalServers; i++){
+        onlineDatastores[i] = SIMTIME_ZERO;
+    }
+}
 
 void DatastoreServer::handleMessage(cMessage *msg){
 
@@ -49,14 +68,18 @@ void DatastoreServer::handleMessage(cMessage *msg){
         if(msg == heartbeatTimer) {
             sendHeartbeats();
             scheduleAt(simTime() + par("heartbeatInterval").doubleValue(), heartbeatTimer);
-        } else if(msg == retransmissionTimer) {
-            retransmitUnackedUpdates();
-            scheduleAt(simTime() + par("retransmissionInterval").doubleValue(), retransmissionTimer);
         }
         return;
     }
 
     NetworkMsg *inboundMsg = check_and_cast<NetworkMsg *>(msg);
+
+    cChannel *chan = msg->getArrivalGate()->getChannel();
+    if( omissionFailureProbability > uniform(0,1)) {
+        EV << "[SERVER-" << serverId << "] Incoming Packet Lost | From: [" << parseMessageToRetrieveSenderModuleClass(msg) << "-" << inboundMsg->getSourceId() << "] | Type: " << inboundMsg->getClassName() << endl;
+        delete inboundMsg;
+        return;
+    }
 
     if(dynamic_cast<ReadRequestMsg *>(inboundMsg)){
         handleRead(check_and_cast<ReadRequestMsg *>(inboundMsg));
@@ -64,29 +87,29 @@ void DatastoreServer::handleMessage(cMessage *msg){
     else if(dynamic_cast<WriteRequestMsg *>(inboundMsg)){
         handleWrite(check_and_cast<WriteRequestMsg *>(inboundMsg));
     }
-    else if(dynamic_cast<UpdateMsg *>(inboundMsg)){
-        handleUpdate(check_and_cast<UpdateMsg *>(inboundMsg));
-    }
-    else if(dynamic_cast<UpdateAckMsg *>(inboundMsg)){
-         ; //TODO
+    else if(dynamic_cast<WritePropagationMsg *>(inboundMsg)){
+        handleUpdate(check_and_cast<WritePropagationMsg *>(inboundMsg));
     }
     else if(dynamic_cast<HeartbeatMsg *>(inboundMsg)){
         handleHeartbeat(check_and_cast<HeartbeatMsg *>(inboundMsg));
+    }
+    else if(dynamic_cast<MissingWritesRequestMsg *>(inboundMsg)){
+        handleMissingWrites(check_and_cast<MissingWritesRequestMsg *>(inboundMsg));
     }
 
     delete inboundMsg;
 }
 
 void DatastoreServer::finish(){
-    EV << "Server[" << serverId << "]" << endl;
+    EV << "[SERVER-" << serverId << "] Terminating" << endl;
 
-    EV << "Final Datastore Status <Key, Value>" << endl;
+    EV << "[SERVER-" << serverId << "] Final Datastore Status <Key, Value>" << endl;
     for(auto tuple : store){
         EV << tuple.first << ": " << tuple.second << endl;
     }
 
     int i;
-    EV << "Vector Clock: " << endl << "[";
+    EV << "[SERVER-" << serverId << "] Vector Clock " << endl << "[";
     for(i = 0; i < vectorClock.size()-1; i++){
         EV << vectorClock[i] << ", ";
     }
@@ -95,7 +118,9 @@ void DatastoreServer::finish(){
 
 void DatastoreServer::handleRead(ReadRequestMsg *msg){
     std::string key = msg->getKey();
-    int value = 0; //TODO: Handle read of key not present
+
+    /* Default value used to handle reads of non-existing keys */
+    int value = 0; 
 
     if(store.find(key) != store.end()){
         value = store[key];
@@ -107,10 +132,11 @@ void DatastoreServer::handleRead(ReadRequestMsg *msg){
     response -> setValue(value);
 
     // Send response back to client
-    send(response, "clientChannels$o", msg->getSourceId() % par("numClientsPerServer").intValue());
+    int clientId = msg->getSourceId() % par("numClientsPerServer").intValue();
+    send(response, "clientChannels$o", clientId);
 
-    EV << "Server " << serverId << " performed Read <" << key
-       << ", " << value << ">" << endl;
+    EV << "[SERVER-" << serverId << "] Read Performed | From: [CLIENT-" << msg->getSourceId() << "] | <"
+       << key << ", " << value << ">" << endl;
 }
 
 void DatastoreServer::handleWrite(WriteRequestMsg *msg){
@@ -122,168 +148,201 @@ void DatastoreServer::handleWrite(WriteRequestMsg *msg){
     store[key] = value;
     vectorClock[serverId]++;
 
-    EV << "Server " << serverId << " applied update for <key,value>: " << key << ", " << value << " from " << sourceId << endl;
+    // Update our last known vector clock
+    lastKnownVectorClocks[serverId] = vectorClock;
+
+    EV << "[SERVER-" << serverId << "] Apply Write | From: [CLIENT-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
     
+    // Store the received Write Propagation in our internal cache
+    storeWrite(key, value, serverId, vectorClock);
+
+    // Notify the client that the write has been performed
     WriteResponseMsg *writeResponse = new WriteResponseMsg();
     writeResponse -> setSourceId(serverId);
     writeResponse -> setKey(key.c_str());
-    send(writeResponse, "clientChannels$o", msg->getSourceId() % par("numClientsPerServer").intValue());
 
-    // Propagate to other servers
+    // Send the response to the client
+    int clientId = msg->getSourceId() % par("numClientsPerServer").intValue();
+    send(writeResponse, "clientChannels$o", clientId);
+
+    // Propagate the received write to other servers
     sendUpdate(key, value);
-
-    EV << "Server " << serverId << " performed Write <" << key
-       << ", " << value << ">" << endl;
 }
 
-bool DatastoreServer::isSatisfyingCausalDependencies(int sourceId, std::map<int, int> senderVectorClock){
-    // For every node other than the sender, check if the sender's clock is ahead of ours
+int DatastoreServer::isSatisfyingCausalDependencies(int sourceId, std::map<int, int> senderVectorClock){
+    // For every server other than the sender, check if the sender's clock is ahead of ours
 
-    EV << "==RECEIVER VC==" << endl;
-    for(auto entry : vectorClock)
-        EV << entry.first << "," << entry.second << endl;
-    EV << "==SENDER VC==" << endl;
+    EV << "[SERVER-" << sourceId << "] Sender VC | SourceID: " << sourceId << endl;
     for(auto entry : senderVectorClock)
         EV << entry.first << "," << entry.second << endl;
-    EV << "==========" << endl;
+    EV << "[SERVER-" << serverId << "] Receiver VC" << endl;
+    for(auto entry : vectorClock)
+        EV << entry.first << "," << entry.second << endl;
 
-
-    for(auto entry : senderVectorClock) { 
-        if(entry.first == sourceId) 
+    // Causal Dependency Check
+    for(const auto& [id, value] : senderVectorClock) { 
+        if(id == sourceId) 
             continue;
         
-        if (vectorClock[entry.first] < entry.second) // Violating causal dependency since sender has seen more recent updates
-            return false;
+        if (vectorClock[id] < value){ // Violating causal dependency since sender has seen more recent updates
+            return 0; //Dependencies Not Satisfied
+        }
+    }
+
+    // Message Older Than Current State Check
+    // Check if the sender's vector clock is older than the receiver's
+    bool isOlder = true;
+    for(const auto& [id, value] : senderVectorClock){
+        if(vectorClock[id] < value){
+            isOlder = false;
+            break;
+        }
+    }
+    if(isOlder){
+        return -1;
     }
 
     // Check that the sender's clock is exactly one ahead of the receiver's
-    return senderVectorClock.at(sourceId) == vectorClock[sourceId] + 1;
+    if(senderVectorClock.at(sourceId) == vectorClock[sourceId] + 1)
+        return 1; //Write is Causal Dependent
+    else
+        return 0;
 }
 
-void DatastoreServer::handleUpdate(UpdateMsg *msg){
+void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
     std::string key = msg->getKey();
     int value = msg->getValue();
     int sourceId = msg->getSourceId();
-    int updateId = msg->getUpdateId();
+    std::map<int, int> senderVectorClock = msg->getVectorClock();
 
-    std::map<int, int> senderVectorClock(msg->getVectorClock());
+    // If the received sender's vector clock is the latest by the sender, update the lastKnownVectorClocks map
+    if(senderVectorClock[sourceId] > lastKnownVectorClocks[sourceId][sourceId])
+        lastKnownVectorClocks[sourceId] = std::map<int, int>(senderVectorClock);
 
-    // Check if the same update has already been received
-    std::pair<int, int> updateInformation = {sourceId, updateId};
-    if (receivedUpdates.contains(updateInformation)) {
-        EV << "Server " << serverId << " ignoring duplicate update " << updateId << " from server " << sourceId << endl;
+    // Store the received Write Propagation in our internal cache
+    Update propagatedWrite = storeWrite(key, value, sourceId, senderVectorClock);
+
+
+    switch(isSatisfyingCausalDependencies(sourceId, senderVectorClock)){
+    case 1: //Write is Causal Dependent -> Apply Update
+    {
         
-        // Still send back ack in case original got lost
-        UpdateAckMsg *ack = new UpdateAckMsg();
-        ack->setSourceId(serverId);
-        ack->setUpdateId(updateId);
-        int gateIndex = (sourceId > serverId) ? sourceId - 1 : sourceId;
-        send(ack, "serverChannels$o", gateIndex);
-
-        return;
-    }
-
-    // Add the update information to the receivedUpdates set
-    receivedUpdates.insert(updateInformation);
-
-    // Check if the update is causally dependent
-    if(isSatisfyingCausalDependencies(sourceId, senderVectorClock)){
-        // Apply update locally
-        EV << "Server " << serverId << " applying update from server " << sourceId 
-        << " for key " << key << endl;
-            
-        //Apply Update
+        // Apply Update
         store[key] = value;
         vectorClock[sourceId] = senderVectorClock[sourceId];
+        EV << "[SERVER-" << serverId << "] Apply Write Propagation | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
 
         checkPendingUpdates();
-    }else{
-        // Store the update in the pending updates list
-        EV << "Server " << serverId << " queuing update from server " << sourceId 
-        << " for key: " << key << " (dependencies not satisfied)" << endl;
 
-        PendingUpdate newPendingUpdate;
-        newPendingUpdate.key = key;
-        newPendingUpdate.value = value;
-        newPendingUpdate.sourceId = sourceId;
-        newPendingUpdate.senderVectorClock = std::map(senderVectorClock);
-        newPendingUpdate.updateId = msg->getUpdateId();
-        pendingUpdates.push_back(newPendingUpdate);
+        // TODO: For performance purposes, perform this operation after a batch of data has been processed instead of every time
+        deleteUpdatesAppliedByEveryone();
+        break;
     }
+    case 0:
+    {    //Dependencies aren't satisfied, some writes are missing -> Store Write in Pending, Ask for Missing Writes
+         // Store the update in the pending updates list
+         EV << "[SERVER-" << serverId << "] Queue Write | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << "> | (Dependencies Not Satisfied)" << endl;
     
-    // Send ack back to the sender
-    UpdateAckMsg *updateResponse = new UpdateAckMsg();
-    updateResponse->setSourceId(serverId);
-    updateResponse->setUpdateId(updateId);
-    //updateAck.setTargetServerId(...);
-    
-    int gateIndex = (sourceId > serverId) ? sourceId-1 : sourceId;
-
-    send(updateResponse, "serverChannels$o", gateIndex);
-}
-
-void DatastoreServer::handleUpdateAck(UpdateAckMsg *msg) {
-    int fromServer = msg->getSourceId();
-    int updateId = msg->getUpdateId();
-
-    if (unackedUpdates[fromServer].contains(updateId)) {
-        delete unackedUpdates[fromServer][updateId].updateMsg; // Clean up the old message
-        unackedUpdates[fromServer].erase(updateId); // Remove the message from the unacked ones
-
-        EV << "Server " << serverId << " received ack for update " << updateId << " from server " << fromServer << endl;
+         pendingUpdates.push_back(propagatedWrite);
+ 
+         //I'm out of sync with the updates. I have to ask others to eventually retransmit missing infos
+         // (even if these messages are only slow and still travelling on network?) - Yes
+ 
+         std::map<int, std::set<int>> missingWrites;
+         
+         for(int i = 0; i < totalServers; i++){
+             if(i == serverId)
+                 continue;
+ 
+             // Populate the map with the missing updates
+             if(vectorClock[i] < senderVectorClock[i]){
+                 int lowestUpdateId = vectorClock[i];
+                 for(int j = lowestUpdateId+1; j <= senderVectorClock[i]; j++){
+                     // Find the Update with the given updateId (i.e. the int at vectorClock[sourceId]) and sent by the the server 
+                     // with its ID equal to sourceId. This guarantees that the (possibly) found update is the one we were looking for.
+                     auto it = std::find_if(pendingUpdates.begin(), pendingUpdates.end(),
+                         [j, i](const Update& u) { return (u.senderVectorClock.at(u.sourceId) == j) && (u.sourceId == i); });
+ 
+                     // If the update has not been found in the pending ones, add its ID to the missing writes to be requested
+                     if (it == pendingUpdates.end())
+                         missingWrites[i].insert(j);
+                 }
+                 
+             }
+ 
+         }
+         
+         // Create a message containing all the writes that this server is missing and send it to all other online datastores
+         MissingWritesRequestMsg *mwrMsg = new MissingWritesRequestMsg();
+         mwrMsg->setSourceId(serverId);
+         mwrMsg->setMissingWrites(std::map<int, std::set<int>>(missingWrites));
+ 
+         for(int i = 0; i < totalServers; i++){
+             if(i == serverId || !getOnlineDatastores().contains(i))
+                 continue;
+ 
+             send(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
+         }
+ 
+         EV << "[SERVER-" << serverId << "] Ask Missing Writes | (To all other servers)" << endl;
+         break;
     }
+    case -1: //Write is older than the current state of the Data Store -> Discard
+    {   
+        EV << "[SERVER-" << serverId << "] Write Propagation Ignored | (No New Information)" << endl;
+        break;
+    }
+    default:
+    {
+        EV << "Fatal Error!" << endl;
+        exit(-1);
+    }
+    }
+  
 }
 
 void DatastoreServer::sendUpdate(std::string key, int value){
-    //Create an UpdateMsg for all the other servers
+    //Create an UpdateMsg for all the other servers to inform them of the received write
     for(int i = 0; i < gateSize("serverChannels$o"); i++){
 
-        if(!onlineDatastores.contains(i)){
-            EV << "Server " << serverId << " skipping update propagation to disconnected server " << i << endl;
+        int serverIndex = fromGateToServer(i);
+
+        if(!getOnlineDatastores().contains(serverIndex)){
+            EV << "[SERVER-" << serverId << "] Skip Propagate Write | To: [SERVER-" << serverIndex << "] | (Offline)" <<endl;
             continue;
         }
 
-        UpdateMsg *updateMsg = new UpdateMsg();
-        updateMsg->setSourceId(serverId);
-        updateMsg->setKey(key.c_str());
-        updateMsg->setValue(value);
-        updateMsg->setUpdateId(updateIdCounter++);
-        updateMsg->setVectorClock(vectorClock);
+        WritePropagationMsg *writePropagationMsg = new WritePropagationMsg();
+        writePropagationMsg->setSourceId(serverId);
+        writePropagationMsg->setKey(key.c_str());
+        writePropagationMsg->setValue(value);
+        writePropagationMsg->setVectorClock(std::map<int,int>(vectorClock));
 
-        /*
-        TODO: Apply random failure
-        if(uniform(0, 1) < par("failureProbability").doubleValue()){
-            EV << "Server " << serverId << " simulating message loss to server " << i << endl;
-            delete updateMsg;
-            continue;
-        }
-        */ 
+        send(writePropagationMsg, "serverChannels$o", i);
 
-        send(updateMsg->dup(), "serverChannels$o", i);
-
-        // TODO are we sure that i is the server's id?
-        unackedUpdates[i][updateMsg->getUpdateId()] = {updateMsg, simTime()}; // Add the newly created update to the unacked ones
-
-        EV << "Server " << serverId << " sent update for <" << key << ", " << value << "> to server " << i << endl;
+        EV << "[SERVER-" << serverId << "] Propagate Write | To: [SERVER-" << serverIndex << "] | <" << key << ", " << value << ">" << endl;
     }
 }
 
 void DatastoreServer::checkPendingUpdates(){
+    // Check if the server is already storing updates that after the current one, do not violate the causal dependecies anymore and now can be applied
+    // to the local store. If so, apply them and remove them from the pending updates list.
+
     bool applied = false;
 
+    EV << "[SERVER-" << serverId << "] Check Pending Writes" << endl;
     do{
         applied = false;
 
         for(auto it = pendingUpdates.begin(); it != pendingUpdates.end(); ){
-            if(isSatisfyingCausalDependencies(it->sourceId, it->senderVectorClock)){
+
+            if(isSatisfyingCausalDependencies(it->sourceId, it->senderVectorClock) == 1){
                 // Apply update locally
-                EV << "Server " << serverId << " applying queued update from server " << it->sourceId 
-                << " for key " << it->key << endl;
+                EV << "[SERVER-" << serverId << "] Apply Queued Write | From: [SERVER-" << it->sourceId << "] | <" << it->key << ", " << it->value << ">" << endl;
                 
                 //Apply Update
                 store[it->key] = it->value;
                 vectorClock[it->sourceId] = it->senderVectorClock[it->sourceId];
-                receivedUpdates.insert({it->sourceId, it->updateId});
 
                 // Remove the update from the pending list
                 it = pendingUpdates.erase(it);
@@ -298,21 +357,57 @@ void DatastoreServer::checkPendingUpdates(){
 }
 
 
-void DatastoreServer::applyUpdate(int sourceId, std::string key, int value){
+void DatastoreServer::handleMissingWrites(MissingWritesRequestMsg *msg){
+    // Collect the missing write and send them to the requesting server
+
+    int sourceId = msg->getSourceId();
+    std::map<int, std::set<int>> missingWrites = msg->getMissingWrites();
+
+    int sourceChannel = fromServerToGate(sourceId);
+
+    // Iterate over the sets of missing writes
+    EV << "[SERVER-" << serverId << "] Checking Have Missing Writes | From: [SERVER-" << msg->getSourceId() << "]" << endl;
+    for (const auto& [currServerId, updateIdSet] : missingWrites) {
+        // Skip if it's the clock of the source (since the source should have its latest updates)
+        if (currServerId == sourceId)
+            continue;
+
+        auto knownUpdates = receivedUpdates[currServerId];
+
+        for(auto updateId : updateIdSet) {
+            auto update = knownUpdates.find(updateId);
+
+            if(update != knownUpdates.end()){
+                WritePropagationMsg *updateMsg = new WritePropagationMsg();
+                updateMsg -> setSourceId(update->second.sourceId);
+                updateMsg -> setKey(update->second.key.c_str());
+                updateMsg -> setValue(update->second.value);
+                updateMsg -> setVectorClock(update->second.senderVectorClock);
+
+                send(updateMsg, "serverChannels$o", sourceChannel);
+                EV << "[SERVER-" << serverId << "] Send Missing Write | To: [SERVER-" << sourceId
+                   << "] | <" << update->second.key << ", " << update->second.value << ">" << " | Source, ID: " << update->second.sourceId << ", " << updateId << endl;
+            }
+        }
+    }
 }
 
-
 void DatastoreServer::handleHeartbeat(HeartbeatMsg *msg) {
-    // Update the online datastores list
-
-    // TODO: Verify if the check on staleness of the heartbeat is necessary [ (messageDelay = default(uniform(0.1s,0.5s))) * 10]
-    if(msg->getTimestamp() - simTime() > par("maxAllowedHeartbeatDelay").doubleValue()){
-        onlineDatastores.erase(msg->getSourceId());
-        return;
+    if(msg->getTimestamp() > onlineDatastores[msg->getSourceId()]) {
+        onlineDatastores[msg->getSourceId()] = msg->getTimestamp();
     }
+    EV << "[SERVER-" << serverId << "] Received Heartbeat | From: [SERVER-" << msg->getSourceId() << "]" << endl;
+}
 
-    onlineDatastores.insert(msg->getSourceId());
+std::set<int> DatastoreServer::getOnlineDatastores() {
+    std::set<int> online;
 
+    for (const auto& [id, timestamp]: onlineDatastores) {
+        if (simTime() - timestamp <= par("maxAllowedHeartbeatDelay").doubleValue())
+            online.insert(id);
+    }
+    
+    return online;
 }
 
 void DatastoreServer::sendHeartbeats() {
@@ -327,44 +422,61 @@ void DatastoreServer::sendHeartbeats() {
     }
 }
 
-void DatastoreServer::retransmitUnackedUpdates(){
-    for(auto &serverPair : unackedUpdates){
-        int targetServer = serverPair.first;
+void DatastoreServer::deleteUpdatesAppliedByEveryone() {
+    std::map<int, int> minimumVectorClock;
 
-        for(auto &updatePair : serverPair.second){
-            int updateId = updatePair.first;
-            SentUpdate &update = updatePair.second;
+    // Initialize minimumVectorClock with maximum possible values
+    for (int i = 0; i < totalServers; i++) {
+        minimumVectorClock[i] = INT_MAX;
+    }
 
-            if(simTime() - update.timestamp >= par("retransmissionInterval").doubleValue()){
-                send(update.updateMsg->dup(), "serverChannels$o", targetServer);
-                update.timestamp = simTime();
+    // Compute the minimum value for each field in the vector clock
+    for(int vectorClockPosition = 0; vectorClockPosition < totalServers; vectorClockPosition++)
+        for (int server = 0; server < totalServers; server++)
+            minimumVectorClock[vectorClockPosition] = std::min(minimumVectorClock[vectorClockPosition], lastKnownVectorClocks[server][vectorClockPosition]);
 
-                EV << "Server " << serverId << " retransmitting update " << updateId << " to server " << targetServer << endl;
-            }
+
+    for(const auto& [serverIdx, value] : minimumVectorClock) {
+        for(int i = prevMinVectorClock[serverIdx] + 1; i <= value; i++){
+            receivedUpdates[serverIdx].erase(i);
+            EV << "[SERVER-" << serverId << "] Delete Write | Source, ID: " << serverIdx << ", " << i << " | (It has been applied by everyone)" << endl;
         }
     }
+
+    prevMinVectorClock = minimumVectorClock;
+}
+
+DatastoreServer::Update DatastoreServer::storeWrite(std::string key, int value, int serverId, std::map<int,int> vectorClock){
+
+    Update update;
+    update.key = key;
+    update.value = value;
+    update.sourceId = serverId;
+    update.senderVectorClock = std::map(vectorClock);
+
+    // Save the received update in the receivedUpdates map
+    int updateId = vectorClock[serverId];
+    receivedUpdates[serverId][updateId] = update;
+
+    return update;
 }
 
 
+inline int DatastoreServer::fromServerToGate(int id){
+    return id > serverId ? id - 1 : id;
+}
 
+inline int DatastoreServer::fromGateToServer(int index){
+    return index >= serverId ? index + 1 : index;
+}
 
+std::string DatastoreServer::parseMessageToRetrieveSenderModuleClass(cMessage *msg){
+    auto className = msg->getSenderModule()->getClassName();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if (std::string(className).find("DatastoreServer") != std::string::npos) // if className contains DatastoreServer return "SERVER"
+        return "SERVER";
+    else if (std::string(className).find("Client") != std::string::npos) // if className contains Client return "CLIENT"
+        return "CLIENT";
+    else
+        return "UNKNOWN"; // Default case if neither SERVER nor CLIENT is found
+}

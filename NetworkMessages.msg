@@ -15,13 +15,16 @@
 
 cplusplus {{
 #include <map>
+#include <set>
 #include <string>
 typedef std::map<int, int> VectorClock;
 typedef std::map<std::string, int> Store;
+typedef std::map<int, std::set<int>> Writes;
 }}
 
 class VectorClock {@existingClass;}
 class Store {@existingClass;}
+class Writes{@existingClass;}
 
 message NetworkMsg {
     int sourceId;
@@ -45,21 +48,19 @@ message WriteResponseMsg extends NetworkMsg{
     string key;
 }
 
-message UpdateMsg extends NetworkMsg{
-    int updateId;
+message WritePropagationMsg extends NetworkMsg {
     string key;
     int value;
-    VectorClock vectorClock; 
-}
-
-message UpdateAckMsg extends NetworkMsg {
-    int updateId;
+    VectorClock vectorClock;
 }
 
 message HeartbeatMsg extends NetworkMsg{
-    int timestamp;
+    simtime_t timestamp;
 }
 
+message MissingWritesRequestMsg extends NetworkMsg {
+    Writes missingWrites;
+}
 
 
 
