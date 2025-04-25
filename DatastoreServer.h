@@ -36,6 +36,18 @@ class DatastoreServer : public cSimpleModule {
         // Probability to drop a incoming/outgoing packet
         double omissionFailureProbability;
 
+        // Probability to create a network partition containing this datastore
+        double createNetworkPartitionProbability;
+
+        // Probability to terminate the network partition containing this datastore
+        double terminateNetworkPartitionProbability;
+
+        // State variable to check if the server is currently in a network partition
+        bool activeNetworkPartition;
+
+        // Probability to include a link in the network partition
+        bool networkPartitionLinkProbability;
+
         // Key-Value Store
         std::map<std::string, int> store;
 
@@ -59,14 +71,20 @@ class DatastoreServer : public cSimpleModule {
         // Log of updates (for updating other datastores when they loose messages)
         std::map<int, std::map<int, Update>> receivedUpdates;
 
-        // Message used to periodically send heartbeats to other datastores
-        cMessage *heartbeatTimer;
-
         // Used to check updates applied by every datastore (to delete them from the receivedUpdates map)
         std::map<int, std::map<int,int>> lastKnownVectorClocks;
 
         // Vector clock containing as fields the youngest update (for each server) received (not necessarily applied) by everyone
         std::map<int, int> prevMinVectorClock;
+
+        // Message used to periodically send heartbeats to other datastores
+        cMessage *heartbeatTimer;
+
+        // Message used to periodically create a partition on the network with an uniform probability
+        cMessage *networkPartitionEventTimer;
+
+        // Contains the status of a link during a partition
+        bool *isChannelAffectedByNetworkPartition;
 
     public:
         DatastoreServer();
@@ -99,6 +117,8 @@ class DatastoreServer : public cSimpleModule {
         inline int fromServerToGate(int id);
         inline int fromGateToServer(int index);
         std::string parseMessageToRetrieveSenderModuleClass(cMessage *msg);
+
+        void sendServerCheckPartition(cMessage* msg , const char* gateName, int gateIndex);
 };
 
 #endif /* DATASTORESERVER_H_ */

@@ -22,6 +22,12 @@ simple DatastoreServer{
         int numClientsPerServer;
         double messageDelay @unit(s) = default(uniform(0.1s,0.5s));
         double omissionFailureProbability = default(0.1);
+
+        double createNetworkPartitionProbability = default(0.1);
+        double terminateNetworkPartitionProbability = default(0.5);
+        double networkPartitionLinkProbability = default(0.5);
+        double networkPartitionEventInterval @unit(s) = default(uniform(5s,10s));
+
         double heartbeatInterval @unit(s) = messageDelay * 10;
         double maxAllowedHeartbeatDelay @unit(s) = heartbeatInterval * 3;
         
@@ -34,7 +40,7 @@ simple Client{
 	parameters:
 	    int clientId;
 	    int connectedServerId;
-	    double operationInterval @unit(s) = default(exponential(1s));
+	    double operationInterval @unit(s) = default(uniform(0.5s,1s));
 	    double readProbability = default(0.8);
         string keyspace = default("keyA,keyB,keyC");
 	    
@@ -42,10 +48,9 @@ simple Client{
         inout serverChannel;
 }
 
-channel LossyChannel extends ned.DatarateChannel {
+channel ServerDelayChannel extends ned.DatarateChannel {
     parameters:
         delay = uniform(0.1s, 0.5s);
-        per = default(0.1);  // Packet Error Rate
 }
 
 network CausalConsistencyDatastoreNetwork{
@@ -73,7 +78,7 @@ network CausalConsistencyDatastoreNetwork{
     connections:
         //Servers Connection
         for i=0..numServers - 2, for j=i+1..numServers-1 {
-            servers[i].serverChannels[j-1] <--> LossyChannel <--> servers[j].serverChannels[i];
+            servers[i].serverChannels[j-1] <--> ServerDelayChannel <--> servers[j].serverChannels[i];
         }
         
         //Clients Connection

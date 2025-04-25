@@ -17,24 +17,37 @@
 
 DatastoreServer::DatastoreServer() {
     heartbeatTimer = nullptr;
+    networkPartitionEventTimer = nullptr;
 }
 
 DatastoreServer::~DatastoreServer() {
     cancelAndDelete(heartbeatTimer);
+    cancelAndDelete(networkPartitionEventTimer);
 }
 
 void DatastoreServer::initialize(){
     serverId = par("serverId");
     totalServers = par("totalServers");
     omissionFailureProbability = par("omissionFailureProbability").doubleValue();
+    createNetworkPartitionProbability = par("createNetworkPartitionProbability").doubleValue();
+    terminateNetworkPartitionProbability = par("terminateNetworkPartitionProbability").doubleValue();
+    networkPartitionLinkProbability = par("networkPartitionLinkProbability").doubleValue();
+    activeNetworkPartition = false;
 
-    for(int i = 0; i < totalServers; i++)
+    isChannelAffectedByNetworkPartition = (bool*) malloc(sizeof(bool) * (totalServers - 1));
+
+    for(int i = 0; i < totalServers-1; i++){
         vectorClock[i] = 0;
+        isChannelAffectedByNetworkPartition[i] = false;
+    }
 
-    EV << "[SERVER-" << serverId << "] Starting" << endl;
+    EV_INFO << "[SERVER-" << serverId << "] Starting" << endl;
 
     heartbeatTimer = new cMessage("heartbeatTimer");
     scheduleAt(simTime(), heartbeatTimer);
+
+    networkPartitionEventTimer = new cMessage("networkPartitionEventTimer");
+    scheduleAt(simTime(), networkPartitionEventTimer);
 
     // Initialize lastKnownVectorClocks map
     for(int i = 0; i < totalServers; i++){
@@ -68,6 +81,39 @@ void DatastoreServer::handleMessage(cMessage *msg){
         if(msg == heartbeatTimer) {
             sendHeartbeats();
             scheduleAt(simTime() + par("heartbeatInterval").doubleValue(), heartbeatTimer);
+        } else if (msg == networkPartitionEventTimer){
+            if(activeNetworkPartition && terminateNetworkPartitionProbability > uniform(0,1)){
+
+                activeNetworkPartition = false;
+                for( int i = 0; i < totalServers; i++){
+                    isChannelAffectedByNetworkPartition[i] = false;
+                }
+
+                EV_INFO << "[SERVER-" << serverId << "] Network Partition Terminated ";
+
+            } else if(!activeNetworkPartition && createNetworkPartitionProbability > uniform(0,1)) {
+
+                // Ensure at least one link is affected
+                int randomIndex = intuniform(0, totalServers - 1);
+                isChannelAffectedByNetworkPartition[randomIndex] = true;
+
+                for (int i = 0; i < totalServers - 1; i++) {
+                    if ( (uniform(0, 1) < par("networkPartitionLinkProbability").doubleValue()) && (i != randomIndex) )
+                        isChannelAffectedByNetworkPartition[i] = true;
+                    
+                }
+
+                EV_INFO << "[SERVER-" << serverId << "] Network Partition Created | Affected Links: ";
+                for (int i = 0; i < totalServers - 1; i++) {
+                    if (isChannelAffectedByNetworkPartition[i])
+                        EV_INFO << fromGateToServer(i) << " ";
+                }
+                EV_INFO << endl;
+                
+                activeNetworkPartition = true;
+            }
+
+            scheduleAt(simTime() + par("networkPartitionEventInterval").doubleValue(), networkPartitionEventTimer);
         }
         return;
     }
@@ -75,8 +121,19 @@ void DatastoreServer::handleMessage(cMessage *msg){
     NetworkMsg *inboundMsg = check_and_cast<NetworkMsg *>(msg);
 
     cChannel *chan = msg->getArrivalGate()->getChannel();
+
+    //Network Partition Check
+    if(activeNetworkPartition && parseMessageToRetrieveSenderModuleClass(msg) == "SERVER"){
+        if( isChannelAffectedByNetworkPartition[ fromServerToGate(inboundMsg->getSourceId()) ] ){
+        EV_INFO << "[SERVER-" << serverId << "] Incoming Packet Lost | Cause: Network Partition | From: [SERVER-" << inboundMsg->getSourceId() << "] | Type: " << inboundMsg->getClassName() << endl;
+        delete inboundMsg;
+        return;
+        }
+    }
+
+    //Apply Omission failures to incoming packet with a certain probability
     if( omissionFailureProbability > uniform(0,1)) {
-        EV << "[SERVER-" << serverId << "] Incoming Packet Lost | From: [" << parseMessageToRetrieveSenderModuleClass(msg) << "-" << inboundMsg->getSourceId() << "] | Type: " << inboundMsg->getClassName() << endl;
+        EV_INFO << "[SERVER-" << serverId << "] Incoming Packet Lost | Cause: Omission | From: [" << parseMessageToRetrieveSenderModuleClass(msg) << "-" << inboundMsg->getSourceId() << "] | Type: " << inboundMsg->getClassName() << endl;
         delete inboundMsg;
         return;
     }
@@ -101,19 +158,19 @@ void DatastoreServer::handleMessage(cMessage *msg){
 }
 
 void DatastoreServer::finish(){
-    EV << "[SERVER-" << serverId << "] Terminating" << endl;
+    EV_INFO << "[SERVER-" << serverId << "] Terminating" << endl;
 
-    EV << "[SERVER-" << serverId << "] Final Datastore Status <Key, Value>" << endl;
+    EV_INFO << "[SERVER-" << serverId << "] Final Datastore Status <Key, Value>" << " | ";
     for(auto tuple : store){
-        EV << tuple.first << ": " << tuple.second << endl;
+        EV_INFO << tuple.first << "," << tuple.second << "; ";
     }
 
     int i;
-    EV << "[SERVER-" << serverId << "] Vector Clock " << endl << "[";
-    for(i = 0; i < vectorClock.size()-1; i++){
-        EV << vectorClock[i] << ", ";
+    EV_INFO << "[SERVER-" << serverId << "] Vector Clock | " << endl;
+    for(i = 0; i < vectorClock.size(); i++){
+        EV_INFO << i << "," << vectorClock[i] << "; ";
     }
-    EV << vectorClock[i] << " ]" << endl;
+    EV_INFO << endl;
 }
 
 void DatastoreServer::handleRead(ReadRequestMsg *msg){
@@ -135,7 +192,7 @@ void DatastoreServer::handleRead(ReadRequestMsg *msg){
     int clientId = msg->getSourceId() % par("numClientsPerServer").intValue();
     send(response, "clientChannels$o", clientId);
 
-    EV << "[SERVER-" << serverId << "] Read Performed | From: [CLIENT-" << msg->getSourceId() << "] | <"
+    EV_INFO << "[SERVER-" << serverId << "] Read Performed | From: [CLIENT-" << msg->getSourceId() << "] | <"
        << key << ", " << value << ">" << endl;
 }
 
@@ -151,7 +208,7 @@ void DatastoreServer::handleWrite(WriteRequestMsg *msg){
     // Update our last known vector clock
     lastKnownVectorClocks[serverId] = vectorClock;
 
-    EV << "[SERVER-" << serverId << "] Apply Write | From: [CLIENT-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
+    EV_INFO << "[SERVER-" << serverId << "] Apply Write | From: [CLIENT-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
     
     // Store the received Write Propagation in our internal cache
     storeWrite(key, value, serverId, vectorClock);
@@ -172,12 +229,13 @@ void DatastoreServer::handleWrite(WriteRequestMsg *msg){
 int DatastoreServer::isSatisfyingCausalDependencies(int sourceId, std::map<int, int> senderVectorClock){
     // For every server other than the sender, check if the sender's clock is ahead of ours
 
-    EV << "[SERVER-" << sourceId << "] Sender VC | SourceID: " << sourceId << endl;
+    EV_INFO << "[SERVER-" << sourceId << "] Sender VC | SourceID: " << sourceId << " | [";
     for(auto entry : senderVectorClock)
-        EV << entry.first << "," << entry.second << endl;
-    EV << "[SERVER-" << serverId << "] Receiver VC" << endl;
+        EV_INFO << entry.first << "," << entry.second << ";";
+    EV_INFO << "] | [SERVER-" << serverId << "] Receiver VC" << " | [";
     for(auto entry : vectorClock)
-        EV << entry.first << "," << entry.second << endl;
+        EV_INFO << entry.first << "," << entry.second << ";";
+    EV_INFO << "]" << endl;
 
     // Causal Dependency Check
     for(const auto& [id, value] : senderVectorClock) { 
@@ -222,7 +280,6 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
     // Store the received Write Propagation in our internal cache
     Update propagatedWrite = storeWrite(key, value, sourceId, senderVectorClock);
 
-
     switch(isSatisfyingCausalDependencies(sourceId, senderVectorClock)){
     case 1: //Write is Causal Dependent -> Apply Update
     {
@@ -230,7 +287,7 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
         // Apply Update
         store[key] = value;
         vectorClock[sourceId] = senderVectorClock[sourceId];
-        EV << "[SERVER-" << serverId << "] Apply Write Propagation | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
+        EV_INFO << "[SERVER-" << serverId << "] Apply Write Propagation | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
 
         checkPendingUpdates();
 
@@ -241,7 +298,7 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
     case 0:
     {    //Dependencies aren't satisfied, some writes are missing -> Store Write in Pending, Ask for Missing Writes
          // Store the update in the pending updates list
-         EV << "[SERVER-" << serverId << "] Queue Write | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << "> | (Dependencies Not Satisfied)" << endl;
+         EV_INFO << "[SERVER-" << serverId << "] Queue Write | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << "> | (Dependencies Not Satisfied)" << endl;
     
          pendingUpdates.push_back(propagatedWrite);
  
@@ -281,20 +338,22 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
              if(i == serverId || !getOnlineDatastores().contains(i))
                  continue;
  
-             send(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
+            sendServerCheckPartition(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
          }
+
+         delete mwrMsg;
  
-         EV << "[SERVER-" << serverId << "] Ask Missing Writes | (To all other servers)" << endl;
+         EV_INFO << "[SERVER-" << serverId << "] Ask Missing Writes | (To all other servers)" << endl;
          break;
     }
     case -1: //Write is older than the current state of the Data Store -> Discard
     {   
-        EV << "[SERVER-" << serverId << "] Write Propagation Ignored | (No New Information)" << endl;
+        EV_INFO << "[SERVER-" << serverId << "] Write Propagation Ignored | (No New Information)" << endl;
         break;
     }
     default:
     {
-        EV << "Fatal Error!" << endl;
+        EV_INFO << "Fatal Error!" << endl;
         exit(-1);
     }
     }
@@ -308,7 +367,7 @@ void DatastoreServer::sendUpdate(std::string key, int value){
         int serverIndex = fromGateToServer(i);
 
         if(!getOnlineDatastores().contains(serverIndex)){
-            EV << "[SERVER-" << serverId << "] Skip Propagate Write | To: [SERVER-" << serverIndex << "] | (Offline)" <<endl;
+            EV_INFO << "[SERVER-" << serverId << "] Skip Propagate Write | To: [SERVER-" << serverIndex << "] | (Offline)" <<endl;
             continue;
         }
 
@@ -318,9 +377,9 @@ void DatastoreServer::sendUpdate(std::string key, int value){
         writePropagationMsg->setValue(value);
         writePropagationMsg->setVectorClock(std::map<int,int>(vectorClock));
 
-        send(writePropagationMsg, "serverChannels$o", i);
+        sendServerCheckPartition(writePropagationMsg, "serverChannels$o", i);
 
-        EV << "[SERVER-" << serverId << "] Propagate Write | To: [SERVER-" << serverIndex << "] | <" << key << ", " << value << ">" << endl;
+        EV_INFO << "[SERVER-" << serverId << "] Propagate Write | To: [SERVER-" << serverIndex << "] | <" << key << ", " << value << ">" << endl;
     }
 }
 
@@ -330,7 +389,7 @@ void DatastoreServer::checkPendingUpdates(){
 
     bool applied = false;
 
-    EV << "[SERVER-" << serverId << "] Check Pending Writes" << endl;
+    EV_INFO << "[SERVER-" << serverId << "] Check Pending Writes" << endl;
     do{
         applied = false;
 
@@ -366,7 +425,7 @@ void DatastoreServer::handleMissingWrites(MissingWritesRequestMsg *msg){
     int sourceChannel = fromServerToGate(sourceId);
 
     // Iterate over the sets of missing writes
-    EV << "[SERVER-" << serverId << "] Checking Have Missing Writes | From: [SERVER-" << msg->getSourceId() << "]" << endl;
+    EV_INFO << "[SERVER-" << serverId << "] Checking Have Missing Writes | From: [SERVER-" << msg->getSourceId() << "]" << endl;
     for (const auto& [currServerId, updateIdSet] : missingWrites) {
         // Skip if it's the clock of the source (since the source should have its latest updates)
         if (currServerId == sourceId)
@@ -384,8 +443,8 @@ void DatastoreServer::handleMissingWrites(MissingWritesRequestMsg *msg){
                 updateMsg -> setValue(update->second.value);
                 updateMsg -> setVectorClock(update->second.senderVectorClock);
 
-                send(updateMsg, "serverChannels$o", sourceChannel);
-                EV << "[SERVER-" << serverId << "] Send Missing Write | To: [SERVER-" << sourceId
+                sendServerCheckPartition(updateMsg, "serverChannels$o", sourceChannel);
+                EV_INFO << "[SERVER-" << serverId << "] Send Missing Write | To: [SERVER-" << sourceId
                    << "] | <" << update->second.key << ", " << update->second.value << ">" << " | Source, ID: " << update->second.sourceId << ", " << updateId << endl;
             }
         }
@@ -396,7 +455,7 @@ void DatastoreServer::handleHeartbeat(HeartbeatMsg *msg) {
     if(msg->getTimestamp() > onlineDatastores[msg->getSourceId()]) {
         onlineDatastores[msg->getSourceId()] = msg->getTimestamp();
     }
-    EV << "[SERVER-" << serverId << "] Received Heartbeat | From: [SERVER-" << msg->getSourceId() << "]" << endl;
+    EV_INFO << "[SERVER-" << serverId << "] Received Heartbeat | From: [SERVER-" << msg->getSourceId() << "]" << endl;
 }
 
 std::set<int> DatastoreServer::getOnlineDatastores() {
@@ -418,7 +477,7 @@ void DatastoreServer::sendHeartbeats() {
         heartbeatMsg->setSourceId(serverId);
         heartbeatMsg->setTimestamp(simTime().dbl());
 
-        send(heartbeatMsg, "serverChannels$o", gateIndex);
+        sendServerCheckPartition(heartbeatMsg, "serverChannels$o", gateIndex);
     }
 }
 
@@ -439,7 +498,7 @@ void DatastoreServer::deleteUpdatesAppliedByEveryone() {
     for(const auto& [serverIdx, value] : minimumVectorClock) {
         for(int i = prevMinVectorClock[serverIdx] + 1; i <= value; i++){
             receivedUpdates[serverIdx].erase(i);
-            EV << "[SERVER-" << serverId << "] Delete Write | Source, ID: " << serverIdx << ", " << i << " | (It has been applied by everyone)" << endl;
+            EV_INFO << "[SERVER-" << serverId << "] Delete Write | Source, ID: " << serverIdx << ", " << i << " | (It has been applied by everyone)" << endl;
         }
     }
 
@@ -480,3 +539,14 @@ std::string DatastoreServer::parseMessageToRetrieveSenderModuleClass(cMessage *m
     else
         return "UNKNOWN"; // Default case if neither SERVER nor CLIENT is found
 }
+
+void DatastoreServer::sendServerCheckPartition(cMessage* msg , const char* gateName, int gateIndex){
+    if(activeNetworkPartition && isChannelAffectedByNetworkPartition[gateIndex]){
+            EV_INFO << "[SERVER-" << serverId << "] Outgoing Packet Not Sent | Cause: Network Partition | To: [SERVER-" << fromGateToServer(gateIndex) << "] | Type: " << msg->getClassName() << endl;
+            delete msg;
+            return;
+    }
+    send(msg, gateName, gateIndex);
+}
+
+
