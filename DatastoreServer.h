@@ -18,6 +18,7 @@
 #include <vector>
 #include <set>
 #include <algorithm>
+#include <random>
 #include "NetworkMessages_m.h"
 
 using namespace omnetpp;

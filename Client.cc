@@ -27,12 +27,12 @@ void Client::initialize() {
     operationInterval = par("operationInterval");
     readProbability = par("readProbability");
 
-    /*
     numReadsPerformed = 0;
     numWritesPerformed = 0;
-    readLatencyStats.setName("Read latency");
-    writeLatencyStats.setName("Write latency");
-    */
+    numFailedOperations = 0;
+    totalOperationTime = 0;
+    readLatencyStats.setName("Read Latency");
+    writeLatencyStats.setName("Write Latency");
 
     currentOperation = OP_NONE;
 
@@ -45,18 +45,20 @@ void Client::initialize() {
         keySpace.push_back(key);
     }
     
-    EV << "[CLIENT-" << clientId << "] Starting | Connected To: [SERVER-" << connectedServerId << "]" << endl;
+    EV_INFO << "[CLIENT-" << clientId << "] Starting | Connected To: [SERVER-" << connectedServerId << "]" << endl;
 }
 
 void Client::finish() {
-    EV << "[CLIENT- " << clientId << "] Terminating |" << endl;
-    //EV << "Reads performed: " << numReadsPerformed << endl;
-    //EV << "Writes performed: " << numWritesPerformed << endl;
+    EV_INFO << "[CLIENT-" << clientId << "] Terminating |" << endl;
+    EV_INFO << "Reads performed: " << numReadsPerformed << endl;
+    EV_INFO << "Writes performed: " << numWritesPerformed << endl;
+    EV_INFO << "Failed operations: " << numFailedOperations << endl;
+    EV_INFO << "Total operation time: " << totalOperationTime << endl;
     if (numReadsPerformed > 0){
-        //EV << "Read latency stats: " << readLatencyStats.getStatistics() << endl;
+        EV_INFO << "Read Latency: " << readLatencyStats.getMean() << endl;
     }
     if (numWritesPerformed > 0){
-        //EV << "Write latency stats: " << writeLatencyStats.getStatistics() << endl;
+        EV_INFO << "Write Latency: " << writeLatencyStats.getMean() << endl;
     }
 }
 
@@ -77,16 +79,18 @@ void Client::handleMessage(cMessage *msg) {
         if(currentOperation == OP_READ && readResponse -> getKey() == currentKey){
             currentOperation = OP_NONE;
             simtime_t latency = simTime() - currentOperationStartTime;
-            //readLatencyStats.collect(latency);
-            EV << "[CLIENT-" << clientId << "] Read Reply | <" << readResponse -> getKey() << ", " << readResponse -> getValue() << "> | Latency: " << latency << endl;
+            readLatencyStats.collect(latency);
+            totalOperationTime += latency.dbl(); // Accumulate operation time
+            EV_INFO << "[CLIENT-" << clientId << "] Read Reply | <" << readResponse -> getKey() << ", " << readResponse -> getValue() << "> | Latency: " << latency << endl;
         }
     } else if(dynamic_cast<WriteResponseMsg *>(inboundMsg)){
         WriteResponseMsg *writeResponse = dynamic_cast<WriteResponseMsg *>(inboundMsg);
         if(currentOperation == OP_WRITE && writeResponse -> getKey() == currentKey){
             currentOperation = OP_NONE;
-            //writeLatencyStats.collect(simTime() - currentOperationStartTime);
             simtime_t latency = simTime() - currentOperationStartTime;
-            EV << "[CLIENT-" << clientId << "] Write Reply | <" << writeResponse -> getKey() << "> | To: [SERVER-" << connectedServerId << "] | Latency: " << latency << endl;
+            writeLatencyStats.collect(latency);
+            totalOperationTime += latency.dbl(); // Accumulate operation time
+            EV_INFO << "[CLIENT-" << clientId << "] Write Reply | <" << writeResponse -> getKey() << "> | To: [SERVER-" << connectedServerId << "] | Latency: " << latency << endl;
         }
     }
 
@@ -95,7 +99,8 @@ void Client::handleMessage(cMessage *msg) {
 
 void Client::performOperation() {
     if (currentOperation != OP_NONE){
-        EV << "[CLIENT-" << clientId << "] Operation Not Performed | (By the server - Message Lost)" << endl;
+        EV_INFO << "[CLIENT-" << clientId << "] Operation Not Performed In Time | (By the server - Message Lost or Slow)" << endl;
+        numFailedOperations++; // Increment failed operations
         currentOperation = OP_NONE;
         return;
     }
@@ -122,7 +127,7 @@ void Client::sendRead(){
     currentOperationStartTime = simTime();
     numReadsPerformed++;
 
-    EV << "[CLIENT-" << clientId << "] Read Request | <" << key << ">" << endl;
+    EV_INFO << "[CLIENT-" << clientId << "] Read Request | <" << key << ">" << endl;
 }
 
 void Client::sendWrite(){
@@ -141,11 +146,11 @@ void Client::sendWrite(){
     currentOperationStartTime = simTime();
     numWritesPerformed++;
 
-    EV << "[CLIENT-" << clientId << "] Write Request | <" << key << ", " << value << ">" << endl;
+    EV_INFO << "[CLIENT-" << clientId << "] Write Request | <" << key << ", " << value << ">" << endl;
 }
 
 std::string Client::generateKey(){
-    int randomIndex = uniform(0, keySpace.size() - 1);
+    int randomIndex = uniform(0, keySpace.size());
     return keySpace[randomIndex];
 }
 

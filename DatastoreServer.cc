@@ -36,8 +36,11 @@ void DatastoreServer::initialize(){
 
     isChannelAffectedByNetworkPartition = (bool*) malloc(sizeof(bool) * (totalServers - 1));
 
-    for(int i = 0; i < totalServers-1; i++){
+    for(int i = 0; i < totalServers; i++){
         vectorClock[i] = 0;
+    }
+
+    for(int i = 0; i < totalServers-1; i++){
         isChannelAffectedByNetworkPartition[i] = false;
     }
 
@@ -122,7 +125,7 @@ void DatastoreServer::handleMessage(cMessage *msg){
 
     cChannel *chan = msg->getArrivalGate()->getChannel();
 
-    //Network Partition Check
+    // Check if the inbound message is coming from a link affected by the Network Partition, if present
     if(activeNetworkPartition && parseMessageToRetrieveSenderModuleClass(msg) == "SERVER"){
         if( isChannelAffectedByNetworkPartition[ fromServerToGate(inboundMsg->getSourceId()) ] ){
         EV_INFO << "[SERVER-" << serverId << "] Incoming Packet Lost | Cause: Network Partition | From: [SERVER-" << inboundMsg->getSourceId() << "] | Type: " << inboundMsg->getClassName() << endl;
@@ -166,7 +169,7 @@ void DatastoreServer::finish(){
     }
 
     int i;
-    EV_INFO << "[SERVER-" << serverId << "] Vector Clock | " << endl;
+    EV_INFO << "[SERVER-" << serverId << "] Vector Clock | ";
     for(i = 0; i < vectorClock.size(); i++){
         EV_INFO << i << "," << vectorClock[i] << "; ";
     }
@@ -291,6 +294,14 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
 
         checkPendingUpdates();
 
+        // If the update was previously stored in the pending updates list, remove it
+        auto it = std::find_if(pendingUpdates.begin(), pendingUpdates.end(),
+            [key, value, senderVectorClock](const Update& u) { return (u.key == key) && (u.value == value) && (u.senderVectorClock == senderVectorClock); });
+        if (it != pendingUpdates.end()) {
+            pendingUpdates.erase(it);
+            EV_INFO << "[SERVER-" << serverId << "] Remove Queued Write | From: [SERVER-" << it->sourceId << "] | <" << it->key << ", " << it->value << ">" << endl;
+        }
+
         // TODO: For performance purposes, perform this operation after a batch of data has been processed instead of every time
         deleteUpdatesAppliedByEveryone();
         break;
@@ -303,7 +314,8 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
          pendingUpdates.push_back(propagatedWrite);
  
          //I'm out of sync with the updates. I have to ask others to eventually retransmit missing infos
-         // (even if these messages are only slow and still travelling on network?) - Yes
+         // (even if these messages are only slow and still traveling on network?) - In general, yes
+         // But I would like to avoid asking many many times for the same information
  
          std::map<int, std::set<int>> missingWrites;
          
@@ -333,17 +345,60 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
          MissingWritesRequestMsg *mwrMsg = new MissingWritesRequestMsg();
          mwrMsg->setSourceId(serverId);
          mwrMsg->setMissingWrites(std::map<int, std::set<int>>(missingWrites));
- 
-         for(int i = 0; i < totalServers; i++){
-             if(i == serverId || !getOnlineDatastores().contains(i))
-                 continue;
- 
-            sendServerCheckPartition(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
+
+         std::string strategy = par("missingWritesRequestStrategy").stringValue();
+
+         if (strategy.compare(0, 8, "flooding") == 0) {
+            // Send to all other servers
+            for(int i = 0; i < totalServers; i++){
+                if(i == serverId || !getOnlineDatastores().contains(i))
+                    continue;
+
+                sendServerCheckPartition(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
+            }
+            EV_INFO << "[SERVER-" << serverId << "] Ask Missing Writes | (Flooding) | #Contacted: " << totalServers - 1 << endl;
+
+         } else if (strategy.compare(0, 6, "linear") == 0) {
+            double maxNodesToContact = std::min(static_cast<double>(totalServers-1), par("maxNodesToContact").doubleValue());
+
+            // Create a set of candidate servers (listed by ID) to contact
+            // Filter the set by excluding the server itself and the ones that are offline
+            // If inside a partition, exclude the ones not having an active channel
+
+            std::set<int> candidateServers;
+            for(int i = 0; i < totalServers; i++){
+                if(i == serverId || !getOnlineDatastores().contains(i) || (activeNetworkPartition && isChannelAffectedByNetworkPartition[i]))
+                    continue;
+
+                candidateServers.insert(i);
+            }
+
+            // Uniform Random Bit Generator
+            std::random_device rd;
+            std::mt19937 g(rd());
+
+            // Randomly shuffle the candidate servers
+            std::vector<int> shuffledServers(candidateServers.begin(), candidateServers.end());
+            std::shuffle(shuffledServers.begin(), shuffledServers.end(), g);
+
+            int contacted = 0;
+
+            // Send to all the remaining servers in the set
+            for( auto it = shuffledServers.begin(); it != shuffledServers.end() && contacted < maxNodesToContact; ++it){
+                int i = *it;
+
+                contacted++;
+                sendServerCheckPartition(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
+            }
+            EV_INFO << "[SERVER-" << serverId << "] Ask Missing Writes | (Linear) | #Contacted: " << contacted << endl;
+
+         } else {
+            EV_INFO << "Fatal Error! | Unknown MissingWritesRequestStrategy" << endl;
+            exit(-1);
          }
 
          delete mwrMsg;
  
-         EV_INFO << "[SERVER-" << serverId << "] Ask Missing Writes | (To all other servers)" << endl;
          break;
     }
     case -1: //Write is older than the current state of the Data Store -> Discard
@@ -395,7 +450,9 @@ void DatastoreServer::checkPendingUpdates(){
 
         for(auto it = pendingUpdates.begin(); it != pendingUpdates.end(); ){
 
-            if(isSatisfyingCausalDependencies(it->sourceId, it->senderVectorClock) == 1){
+            int causalDepStatusResult = isSatisfyingCausalDependencies(it->sourceId, it->senderVectorClock);
+
+            if(causalDepStatusResult == 1){
                 // Apply update locally
                 EV << "[SERVER-" << serverId << "] Apply Queued Write | From: [SERVER-" << it->sourceId << "] | <" << it->key << ", " << it->value << ">" << endl;
                 
@@ -407,6 +464,10 @@ void DatastoreServer::checkPendingUpdates(){
                 it = pendingUpdates.erase(it);
 
                 applied = true;
+            } else if (causalDepStatusResult == -1) {
+                EV << "[SERVER-" << serverId << "] Remove Queued Write | From: [SERVER-" << it->sourceId << "] | <" << it->key << ", " << it->value << "> | (Old Information)" << endl;
+
+                it = pendingUpdates.erase(it);
             } else {
                 it++;
             }   

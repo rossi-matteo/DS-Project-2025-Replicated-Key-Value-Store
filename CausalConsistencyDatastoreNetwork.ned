@@ -20,6 +20,7 @@ simple DatastoreServer{
         int serverId;
         int totalServers;
         int numClientsPerServer;
+
         double messageDelay @unit(s) = default(uniform(0.1s,0.5s));
         double omissionFailureProbability = default(0.1);
 
@@ -31,6 +32,8 @@ simple DatastoreServer{
         double heartbeatInterval @unit(s) = messageDelay * 10;
         double maxAllowedHeartbeatDelay @unit(s) = heartbeatInterval * 3;
         
+        string missingWritesRequestStrategy = default("linear"); // "flooding" or "linear"
+        double maxNodesToContact = default(ceil( log(totalServers)/log(2) )); //base 2 logarithm
     gates:
         inout serverChannels[totalServers-1];
         inout clientChannels[numClientsPerServer];
@@ -42,7 +45,7 @@ simple Client{
 	    int connectedServerId;
 	    double operationInterval @unit(s) = default(uniform(0.5s,1s));
 	    double readProbability = default(0.8);
-        string keyspace = default("keyA,keyB,keyC");
+        string keyspace = default("Alpha,Beta,Gamma,Delta");
 	    
 	gates:
         inout serverChannel;

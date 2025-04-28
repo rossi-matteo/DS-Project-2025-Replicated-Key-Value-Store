@@ -37,6 +37,9 @@ class Client : public cSimpleModule {
         cHistogram readLatencyStats;    
         cHistogram writeLatencyStats;
 
+        int numFailedOperations;
+        double totalOperationTime;
+
         typedef enum {OP_READ, OP_WRITE, OP_NONE} OperationType;
         OperationType currentOperation;
         std::string currentKey;
