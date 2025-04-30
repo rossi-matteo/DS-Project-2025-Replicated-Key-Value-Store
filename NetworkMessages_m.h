@@ -276,6 +276,7 @@ inline void doParsimUnpacking(omnetpp::cCommBuffer *b, WritePropagationMsg& obj)
  * message HeartbeatMsg extends NetworkMsg
  * {
  *     simtime_t timestamp;
+ *     VectorClock vectorClock;
  * }
  * </pre>
  */
@@ -283,6 +284,7 @@ class HeartbeatMsg : public ::NetworkMsg
 {
   protected:
     omnetpp::simtime_t timestamp = SIMTIME_ZERO;
+    VectorClock vectorClock;
 
   private:
     void copy(const HeartbeatMsg& other);
@@ -301,13 +303,17 @@ class HeartbeatMsg : public ::NetworkMsg
 
     virtual omnetpp::simtime_t getTimestamp() const;
     virtual void setTimestamp(omnetpp::simtime_t timestamp);
+
+    virtual const VectorClock& getVectorClock() const;
+    virtual VectorClock& getVectorClockForUpdate() { return const_cast<VectorClock&>(const_cast<HeartbeatMsg*>(this)->getVectorClock());}
+    virtual void setVectorClock(const VectorClock& vectorClock);
 };
 
 inline void doParsimPacking(omnetpp::cCommBuffer *b, const HeartbeatMsg& obj) {obj.parsimPack(b);}
 inline void doParsimUnpacking(omnetpp::cCommBuffer *b, HeartbeatMsg& obj) {obj.parsimUnpack(b);}
 
 /**
- * Class generated from <tt>NetworkMessages.msg:61</tt> by opp_msgtool.
+ * Class generated from <tt>NetworkMessages.msg:62</tt> by opp_msgtool.
  * <pre>
  * message MissingWritesRequestMsg extends NetworkMsg
  * {

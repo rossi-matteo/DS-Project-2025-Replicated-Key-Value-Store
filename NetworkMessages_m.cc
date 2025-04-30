@@ -3231,18 +3231,21 @@ HeartbeatMsg& HeartbeatMsg::operator=(const HeartbeatMsg& other)
 void HeartbeatMsg::copy(const HeartbeatMsg& other)
 {
     this->timestamp = other.timestamp;
+    this->vectorClock = other.vectorClock;
 }
 
 void HeartbeatMsg::parsimPack(omnetpp::cCommBuffer *b) const
 {
     ::NetworkMsg::parsimPack(b);
     doParsimPacking(b,this->timestamp);
+    doParsimPacking(b,this->vectorClock);
 }
 
 void HeartbeatMsg::parsimUnpack(omnetpp::cCommBuffer *b)
 {
     ::NetworkMsg::parsimUnpack(b);
     doParsimUnpacking(b,this->timestamp);
+    doParsimUnpacking(b,this->vectorClock);
 }
 
 omnetpp::simtime_t HeartbeatMsg::getTimestamp() const
@@ -3255,12 +3258,23 @@ void HeartbeatMsg::setTimestamp(omnetpp::simtime_t timestamp)
     this->timestamp = timestamp;
 }
 
+const VectorClock& HeartbeatMsg::getVectorClock() const
+{
+    return this->vectorClock;
+}
+
+void HeartbeatMsg::setVectorClock(const VectorClock& vectorClock)
+{
+    this->vectorClock = vectorClock;
+}
+
 class HeartbeatMsgDescriptor : public omnetpp::cClassDescriptor
 {
   private:
     mutable const char **propertyNames;
     enum FieldConstants {
         FIELD_timestamp,
+        FIELD_vectorClock,
     };
   public:
     HeartbeatMsgDescriptor();
@@ -3327,7 +3341,7 @@ const char *HeartbeatMsgDescriptor::getProperty(const char *propertyName) const
 int HeartbeatMsgDescriptor::getFieldCount() const
 {
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
-    return base ? 1+base->getFieldCount() : 1;
+    return base ? 2+base->getFieldCount() : 2;
 }
 
 unsigned int HeartbeatMsgDescriptor::getFieldTypeFlags(int field) const
@@ -3340,8 +3354,9 @@ unsigned int HeartbeatMsgDescriptor::getFieldTypeFlags(int field) const
     }
     static unsigned int fieldTypeFlags[] = {
         FD_ISEDITABLE,    // FIELD_timestamp
+        FD_ISCOMPOUND,    // FIELD_vectorClock
     };
-    return (field >= 0 && field < 1) ? fieldTypeFlags[field] : 0;
+    return (field >= 0 && field < 2) ? fieldTypeFlags[field] : 0;
 }
 
 const char *HeartbeatMsgDescriptor::getFieldName(int field) const
@@ -3354,8 +3369,9 @@ const char *HeartbeatMsgDescriptor::getFieldName(int field) const
     }
     static const char *fieldNames[] = {
         "timestamp",
+        "vectorClock",
     };
-    return (field >= 0 && field < 1) ? fieldNames[field] : nullptr;
+    return (field >= 0 && field < 2) ? fieldNames[field] : nullptr;
 }
 
 int HeartbeatMsgDescriptor::findField(const char *fieldName) const
@@ -3363,6 +3379,7 @@ int HeartbeatMsgDescriptor::findField(const char *fieldName) const
     omnetpp::cClassDescriptor *base = getBaseClassDescriptor();
     int baseIndex = base ? base->getFieldCount() : 0;
     if (strcmp(fieldName, "timestamp") == 0) return baseIndex + 0;
+    if (strcmp(fieldName, "vectorClock") == 0) return baseIndex + 1;
     return base ? base->findField(fieldName) : -1;
 }
 
@@ -3376,8 +3393,9 @@ const char *HeartbeatMsgDescriptor::getFieldTypeString(int field) const
     }
     static const char *fieldTypeStrings[] = {
         "omnetpp::simtime_t",    // FIELD_timestamp
+        "VectorClock",    // FIELD_vectorClock
     };
-    return (field >= 0 && field < 1) ? fieldTypeStrings[field] : nullptr;
+    return (field >= 0 && field < 2) ? fieldTypeStrings[field] : nullptr;
 }
 
 const char **HeartbeatMsgDescriptor::getFieldPropertyNames(int field) const
@@ -3461,6 +3479,7 @@ std::string HeartbeatMsgDescriptor::getFieldValueAsString(omnetpp::any_ptr objec
     HeartbeatMsg *pp = omnetpp::fromAnyPtr<HeartbeatMsg>(object); (void)pp;
     switch (field) {
         case FIELD_timestamp: return simtime2string(pp->getTimestamp());
+        case FIELD_vectorClock: return "";
         default: return "";
     }
 }
@@ -3493,6 +3512,7 @@ omnetpp::cValue HeartbeatMsgDescriptor::getFieldValue(omnetpp::any_ptr object, i
     HeartbeatMsg *pp = omnetpp::fromAnyPtr<HeartbeatMsg>(object); (void)pp;
     switch (field) {
         case FIELD_timestamp: return pp->getTimestamp().dbl();
+        case FIELD_vectorClock: return omnetpp::toAnyPtr(&pp->getVectorClock()); break;
         default: throw omnetpp::cRuntimeError("Cannot return field %d of class 'HeartbeatMsg' as cValue -- field index out of range?", field);
     }
 }
@@ -3523,6 +3543,7 @@ const char *HeartbeatMsgDescriptor::getFieldStructName(int field) const
         field -= base->getFieldCount();
     }
     switch (field) {
+        case FIELD_vectorClock: return omnetpp::opp_typename(typeid(VectorClock));
         default: return nullptr;
     };
 }
@@ -3537,6 +3558,7 @@ omnetpp::any_ptr HeartbeatMsgDescriptor::getFieldStructValuePointer(omnetpp::any
     }
     HeartbeatMsg *pp = omnetpp::fromAnyPtr<HeartbeatMsg>(object); (void)pp;
     switch (field) {
+        case FIELD_vectorClock: return omnetpp::toAnyPtr(&pp->getVectorClock()); break;
         default: return omnetpp::any_ptr(nullptr);
     }
 }

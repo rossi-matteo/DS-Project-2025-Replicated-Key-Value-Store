@@ -23,6 +23,63 @@
 
 using namespace omnetpp;
 
+// Message Stats Tracking Struct
+struct MessageStats{
+    // Outgoing messages by type
+    std::map<std::string, int> outgoingByType;
+    
+    // Incoming messages by type
+    std::map<std::string, int> incomingByType;
+    
+    // Discarded messages (Omission/Network Partition) by type
+    std::map<std::string, int> discardedByType;
+    
+    // Specific tracking for MissingWrites requests
+    int missingWritesRequested;       // Total missing writes requested
+    int missingWritesFulfilled;       // Missing writes successfully sent back
+    int missingWritesSkippedCooldown; // Missing writes not requested due to cooldown
+    
+    //  Efficiency Metrics
+    int totalBatchedRequests;        // Number of batched request messages sent
+    
+    // Add or increment a message count by type
+    void incrementOutgoing(const std::string& msgType) {
+        outgoingByType[msgType]++;
+    }
+    
+    void incrementIncoming(const std::string& msgType) {
+        incomingByType[msgType]++;
+    }
+    
+    void incrementDiscarded(const std::string& msgType) {
+        discardedByType[msgType]++;
+    }
+    
+    // Methods to record statistics in OMNeT++ format
+    void recordScalar(cComponent* component, const std::string& prefix) const {
+        // Record outgoing messages
+        for (const auto& [type, count] : outgoingByType) {
+            component->recordScalar((prefix + "outgoing_" + type).c_str(), count);
+        }
+        
+        // Record Incoming messages
+        for (const auto& [type, count] : incomingByType) {
+            component->recordScalar((prefix + "incoming_" + type).c_str(), count);
+        }
+        
+        // Record Discarded Messages (Omission/Network Partition)
+        for (const auto& [type, count] : discardedByType) {
+            component->recordScalar((prefix + "discarded_" + type).c_str(), count);
+        }
+        
+        // Record MissingWrites statistics
+        component->recordScalar((prefix + "missing_writes_requested").c_str(), missingWritesRequested);
+        component->recordScalar((prefix + "missing_writes_fulfilled").c_str(), missingWritesFulfilled);
+        component->recordScalar((prefix + "missing_writes_skipped_cooldown").c_str(), missingWritesSkippedCooldown);
+        component->recordScalar((prefix + "total_batched_requests").c_str(), totalBatchedRequests);
+    }
+};   
+
 #ifndef DATASTORESERVER_H_
 #define DATASTORESERVER_H_
 
@@ -87,6 +144,22 @@ class DatastoreServer : public cSimpleModule {
         // Contains the status of a link during a partition
         bool *isChannelAffectedByNetworkPartition;
 
+        // Tracking of Last Request made for a specific update
+        typedef struct {
+            simtime_t lastRequestTime;
+            int requestCount;
+        }RequestInfo;
+
+        // Map to track when we last requested each missing update: <serverId, <updateId, RequestInfo>>
+        std::map<int, std::map<int, RequestInfo>> lastRequestTimes;
+
+        // Cooldown parameters
+        const simtime_t INITIAL_COOLDOWN = 1.0; // 500ms initial cooldown
+        const double BACKOFF_FACTOR = 2.0;     // Exponential Backoff multiplier
+        const simtime_t MAX_COOLDOWN = 10.0;   // Maximum Cooldown (10 seconds) 
+
+        struct MessageStats messageStats;
+
     public:
         DatastoreServer();
         virtual ~DatastoreServer();
@@ -100,6 +173,15 @@ class DatastoreServer : public cSimpleModule {
         void handleWrite(WriteRequestMsg *msg);
         void handleUpdate(WritePropagationMsg *msg);
         void handleMissingWrites(MissingWritesRequestMsg *msg);
+        void processMissingWrites(
+            const std::map<int, int>& senderVectorClock,
+            std::map<int, std::set<int>>& allMissingWrites,
+            std::map<int, std::set<int>>& missingWritesToRequest,
+            std::map<int, std::map<int, RequestInfo>>& lastRequestTimes,
+            simtime_t currentTime
+        );
+
+        void sendMissingWritesRequest(std::map<int, std::set<int>>(missingWritesToRequest));
 
         void sendUpdate(std::string key, int value);
 
@@ -120,6 +202,8 @@ class DatastoreServer : public cSimpleModule {
         std::string parseMessageToRetrieveSenderModuleClass(cMessage *msg);
 
         void sendServerCheckPartition(cMessage* msg , const char* gateName, int gateIndex);
+
+        void logMessageStats();
 };
 
 #endif /* DATASTORESERVER_H_ */

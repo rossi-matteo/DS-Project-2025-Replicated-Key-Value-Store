@@ -34,6 +34,12 @@ void DatastoreServer::initialize(){
     networkPartitionLinkProbability = par("networkPartitionLinkProbability").doubleValue();
     activeNetworkPartition = false;
 
+    // Initializing Log Stats
+    messageStats.missingWritesRequested = 0;
+    messageStats.missingWritesFulfilled = 0;
+    messageStats.missingWritesSkippedCooldown = 0;
+    messageStats.totalBatchedRequests = 0;
+
     isChannelAffectedByNetworkPartition = (bool*) malloc(sizeof(bool) * (totalServers - 1));
 
     for(int i = 0; i < totalServers; i++){
@@ -123,12 +129,14 @@ void DatastoreServer::handleMessage(cMessage *msg){
 
     NetworkMsg *inboundMsg = check_and_cast<NetworkMsg *>(msg);
 
-    cChannel *chan = msg->getArrivalGate()->getChannel();
+    // Tracking incoming messages
+    messageStats.incrementIncoming(inboundMsg->getClassName());
 
     // Check if the inbound message is coming from a link affected by the Network Partition, if present
     if(activeNetworkPartition && parseMessageToRetrieveSenderModuleClass(msg) == "SERVER"){
         if( isChannelAffectedByNetworkPartition[ fromServerToGate(inboundMsg->getSourceId()) ] ){
         EV_INFO << "[SERVER-" << serverId << "] Incoming Packet Lost | Cause: Network Partition | From: [SERVER-" << inboundMsg->getSourceId() << "] | Type: " << inboundMsg->getClassName() << endl;
+        messageStats.incrementDiscarded(inboundMsg->getClassName());
         delete inboundMsg;
         return;
         }
@@ -137,6 +145,7 @@ void DatastoreServer::handleMessage(cMessage *msg){
     //Apply Omission failures to incoming packet with a certain probability
     if( omissionFailureProbability > uniform(0,1)) {
         EV_INFO << "[SERVER-" << serverId << "] Incoming Packet Lost | Cause: Omission | From: [" << parseMessageToRetrieveSenderModuleClass(msg) << "-" << inboundMsg->getSourceId() << "] | Type: " << inboundMsg->getClassName() << endl;
+        messageStats.incrementDiscarded(inboundMsg->getClassName());
         delete inboundMsg;
         return;
     }
@@ -174,6 +183,8 @@ void DatastoreServer::finish(){
         EV_INFO << i << "," << vectorClock[i] << "; ";
     }
     EV_INFO << endl;
+
+    logMessageStats();
 }
 
 void DatastoreServer::handleRead(ReadRequestMsg *msg){
@@ -196,7 +207,10 @@ void DatastoreServer::handleRead(ReadRequestMsg *msg){
     send(response, "clientChannels$o", clientId);
 
     EV_INFO << "[SERVER-" << serverId << "] Read Performed | From: [CLIENT-" << msg->getSourceId() << "] | <"
-       << key << ", " << value << ">" << endl;
+       << key << ", " << value << "> | Vector Clock: [";
+    for(auto entry : vectorClock)
+       EV_INFO << entry.first << "," << entry.second << ";";
+    EV_INFO << "]" << endl;
 }
 
 void DatastoreServer::handleWrite(WriteRequestMsg *msg){
@@ -211,8 +225,11 @@ void DatastoreServer::handleWrite(WriteRequestMsg *msg){
     // Update our last known vector clock
     lastKnownVectorClocks[serverId] = vectorClock;
 
-    EV_INFO << "[SERVER-" << serverId << "] Apply Write | From: [CLIENT-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
-    
+    EV_INFO << "[SERVER-" << serverId << "] Apply Write | From: [CLIENT-" << msg->getSourceId() << "] | <" << key << ", " << value << "> | Vector Clock: [";
+    for(auto entry : vectorClock)
+        EV_INFO << entry.first << "," << entry.second << ";";
+    EV_INFO << "]" << endl;
+
     // Store the received Write Propagation in our internal cache
     storeWrite(key, value, serverId, vectorClock);
 
@@ -284,135 +301,194 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
     Update propagatedWrite = storeWrite(key, value, sourceId, senderVectorClock);
 
     switch(isSatisfyingCausalDependencies(sourceId, senderVectorClock)){
-    case 1: //Write is Causal Dependent -> Apply Update
-    {
-        
-        // Apply Update
-        store[key] = value;
-        vectorClock[sourceId] = senderVectorClock[sourceId];
-        EV_INFO << "[SERVER-" << serverId << "] Apply Write Propagation | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
+        case 1: //Write is Causal Dependent -> Apply Update
+        {
+            
+            // Apply Update
+            store[key] = value;
+            vectorClock[sourceId] = senderVectorClock[sourceId];
+            EV_INFO << "[SERVER-" << serverId << "] Apply Write Propagation | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << ">" << endl;
 
-        checkPendingUpdates();
+            checkPendingUpdates();
 
-        // If the update was previously stored in the pending updates list, remove it
-        auto it = std::find_if(pendingUpdates.begin(), pendingUpdates.end(),
-            [key, value, senderVectorClock](const Update& u) { return (u.key == key) && (u.value == value) && (u.senderVectorClock == senderVectorClock); });
-        if (it != pendingUpdates.end()) {
-            pendingUpdates.erase(it);
-            EV_INFO << "[SERVER-" << serverId << "] Remove Queued Write | From: [SERVER-" << it->sourceId << "] | <" << it->key << ", " << it->value << ">" << endl;
+            // If the update was previously stored in the pending updates list, remove it
+            auto it = std::find_if(pendingUpdates.begin(), pendingUpdates.end(),
+                [key, value, senderVectorClock](const Update& u) { return (u.key == key) && (u.value == value) && (u.senderVectorClock == senderVectorClock); });
+            if (it != pendingUpdates.end()) {
+                pendingUpdates.erase(it);
+                EV_INFO << "[SERVER-" << serverId << "] Remove Queued Write | From: [SERVER-" << it->sourceId << "] | <" << it->key << ", " << it->value << ">" << endl;
+            }
+
+            // TODO: For performance purposes, perform this operation after a batch of data has been processed instead of every time
+            deleteUpdatesAppliedByEveryone();
+            break;
         }
-
-        // TODO: For performance purposes, perform this operation after a batch of data has been processed instead of every time
-        deleteUpdatesAppliedByEveryone();
-        break;
-    }
-    case 0:
-    {    //Dependencies aren't satisfied, some writes are missing -> Store Write in Pending, Ask for Missing Writes
-         // Store the update in the pending updates list
-         EV_INFO << "[SERVER-" << serverId << "] Queue Write | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << "> | (Dependencies Not Satisfied)" << endl;
+        case 0:
+        {    // Dependencies aren't satisfied, some writes are missing -> Store Write in Pending, Ask for Missing Writes
+            // Store the update in the pending updates list
+            EV_INFO << "[SERVER-" << serverId << "] Queue Write | From: [SERVER-" << msg->getSourceId() << "] | <" << key << ", " << value << "> | (Dependencies Not Satisfied)" << endl;
+        
+            pendingUpdates.push_back(propagatedWrite);
     
-         pendingUpdates.push_back(propagatedWrite);
- 
-         //I'm out of sync with the updates. I have to ask others to eventually retransmit missing infos
-         // (even if these messages are only slow and still traveling on network?) - In general, yes
-         // But I would like to avoid asking many many times for the same information
- 
-         std::map<int, std::set<int>> missingWrites;
-         
-         for(int i = 0; i < totalServers; i++){
-             if(i == serverId)
-                 continue;
- 
-             // Populate the map with the missing updates
-             if(vectorClock[i] < senderVectorClock[i]){
-                 int lowestUpdateId = vectorClock[i];
-                 for(int j = lowestUpdateId+1; j <= senderVectorClock[i]; j++){
-                     // Find the Update with the given updateId (i.e. the int at vectorClock[sourceId]) and sent by the the server 
-                     // with its ID equal to sourceId. This guarantees that the (possibly) found update is the one we were looking for.
-                     auto it = std::find_if(pendingUpdates.begin(), pendingUpdates.end(),
-                         [j, i](const Update& u) { return (u.senderVectorClock.at(u.sourceId) == j) && (u.sourceId == i); });
- 
-                     // If the update has not been found in the pending ones, add its ID to the missing writes to be requested
-                     if (it == pendingUpdates.end())
-                         missingWrites[i].insert(j);
-                 }
-                 
-             }
- 
-         }
-         
-         // Create a message containing all the writes that this server is missing and send it to all other online datastores
-         MissingWritesRequestMsg *mwrMsg = new MissingWritesRequestMsg();
-         mwrMsg->setSourceId(serverId);
-         mwrMsg->setMissingWrites(std::map<int, std::set<int>>(missingWrites));
+            //I'm out of sync with the updates. I have to ask others to eventually retransmit missing infos
+            // (even if these messages are only slow and still traveling on network?) - In general, yes
+            // But I would like to avoid asking many times for the same information -> Request Batching + Exponential Backoff on Cooldown Period
+    
+            std::map<int, std::set<int>> allMissingWrites;
+            std::map<int, std::set<int>> missingWritesToRequest;
 
-         std::string strategy = par("missingWritesRequestStrategy").stringValue();
+            processMissingWrites(senderVectorClock, allMissingWrites, missingWritesToRequest, lastRequestTimes, simTime());
 
-         if (strategy.compare(0, 8, "flooding") == 0) {
-            // Send to all other servers
-            for(int i = 0; i < totalServers; i++){
-                if(i == serverId || !getOnlineDatastores().contains(i))
-                    continue;
-
-                sendServerCheckPartition(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
-            }
-            EV_INFO << "[SERVER-" << serverId << "] Ask Missing Writes | (Flooding) | #Contacted: " << totalServers - 1 << endl;
-
-         } else if (strategy.compare(0, 6, "linear") == 0) {
-            double maxNodesToContact = std::min(static_cast<double>(totalServers-1), par("maxNodesToContact").doubleValue());
-
-            // Create a set of candidate servers (listed by ID) to contact
-            // Filter the set by excluding the server itself and the ones that are offline
-            // If inside a partition, exclude the ones not having an active channel
-
-            std::set<int> candidateServers;
-            for(int i = 0; i < totalServers; i++){
-                if(i == serverId || !getOnlineDatastores().contains(i) || (activeNetworkPartition && isChannelAffectedByNetworkPartition[i]))
-                    continue;
-
-                candidateServers.insert(i);
+            if(!missingWritesToRequest.empty()){
+                sendMissingWritesRequest(missingWritesToRequest);
+            } else {
+                EV_INFO << "[SERVER-" << serverId << "] No new missing writes to request (all in cooldown)" << endl;
             }
 
-            // Uniform Random Bit Generator
-            std::random_device rd;
-            std::mt19937 g(rd());
+        }
+        case -1: //Write is older than the current state of the Data Store -> Discard
+        {   
+            EV_INFO << "[SERVER-" << serverId << "] Write Propagation Ignored | (No New Information)" << endl;
+            break;
+        }
+        default:
+        {
+            EV_INFO << "Fatal Error!" << endl;
+            exit(-1);
+        }
+    }
 
-            // Randomly shuffle the candidate servers
-            std::vector<int> shuffledServers(candidateServers.begin(), candidateServers.end());
-            std::shuffle(shuffledServers.begin(), shuffledServers.end(), g);
+}
 
-            int contacted = 0;
+void DatastoreServer::processMissingWrites(
+    const std::map<int, int>& senderVectorClock,
+    std::map<int, std::set<int>>& allMissingWrites,
+    std::map<int, std::set<int>>& missingWritesToRequest,
+    std::map<int, std::map<int, RequestInfo>>& lastRequestTimes,
+    simtime_t currentTime
+) {
 
-            // Send to all the remaining servers in the set
-            for( auto it = shuffledServers.begin(); it != shuffledServers.end() && contacted < maxNodesToContact; ++it){
-                int i = *it;
+    int skippedCount = 0;
+    int requestedCount = 0;
 
-                contacted++;
-                sendServerCheckPartition(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
+    for (int i = 0; i < totalServers; i++) {
+        if (i == serverId)
+            continue;
+
+        // Populate the map with the missing updates
+        if (vectorClock[i] < senderVectorClock.at(i)) {
+            int lowestUpdateId = vectorClock[i];
+            for (int j = lowestUpdateId + 1; j <= senderVectorClock.at(i); j++) {
+                // Find the Update with the given updateId (vectorClock[sourceId]) and sent by the server
+                // with its ID equal to sourceId. This guarantees that the (possibly) found update is the one we were looking for.
+                auto it = std::find_if(pendingUpdates.begin(), pendingUpdates.end(),
+                    [j, i](const Update& u) { return (u.senderVectorClock.at(u.sourceId) == j) && (u.sourceId == i); });
+
+                // If the update has not been found in the pending ones, add its ID to the missing writes to be requested
+                if (it == pendingUpdates.end()) {
+                    allMissingWrites[i].insert(j);
+
+                    // Check if we've recently requested this update
+                    std::vector<std::tuple<int, int, simtime_t, simtime_t>> skippedRequests;
+
+                    if (lastRequestTimes.find(i) == lastRequestTimes.end() || lastRequestTimes[i].find(j) == lastRequestTimes[i].end()) {
+                        // 1st time requesting this update
+                        missingWritesToRequest[i].insert(j);
+                        lastRequestTimes[i][j] = {currentTime, 1};
+                        requestedCount++;
+                    } else {
+                        RequestInfo& reqInfo = lastRequestTimes[i][j];
+
+                        // Calculate the cooldown period with exponential backoff
+                        simtime_t cooldown = std::min(INITIAL_COOLDOWN * std::pow(BACKOFF_FACTOR, reqInfo.requestCount - 1), MAX_COOLDOWN);
+
+                        // Check if the cooldown period has passed
+                        if (currentTime - reqInfo.lastRequestTime >= cooldown) {
+                            missingWritesToRequest[i].insert(j);
+                            reqInfo.lastRequestTime = currentTime;
+                            reqInfo.requestCount++;
+                            requestedCount++;
+                        } else {
+                            skippedRequests.emplace_back(i, j, currentTime - reqInfo.lastRequestTime, cooldown);
+                            skippedCount++;
+                        }
+                    }
+
+                    messageStats.missingWritesRequested += requestedCount;
+                    messageStats.missingWritesSkippedCooldown += skippedCount;
+
+                    // Log all skipped requests in a single message
+                    if (!skippedRequests.empty()) {
+                        EV_INFO << "[SERVER-" << serverId << "] Skipping Write Requests | ";
+                        for (const auto& [serverId, updateId, elapsed, cooldown] : skippedRequests) {
+                            EV_INFO << "Write: ID, Value: " << serverId << ", " << updateId
+                                    << " (in cooldown: " << elapsed << "/" << cooldown << "); ";
+                        }
+                        EV_INFO << endl;
+                    }
+                }
             }
-            EV_INFO << "[SERVER-" << serverId << "] Ask Missing Writes | (Linear) | #Contacted: " << contacted << endl;
+        }
+    }
+}
 
-         } else {
+void DatastoreServer::sendMissingWritesRequest(std::map<int, std::set<int>>(missingWritesToRequest)){
+
+    MissingWritesRequestMsg *mwrMsg = new MissingWritesRequestMsg();
+    mwrMsg->setSourceId(serverId);
+    mwrMsg->setMissingWrites(std::map<int, std::set<int>>(missingWritesToRequest));
+
+    messageStats.totalBatchedRequests++;
+
+    std::string strategy = par("missingWritesRequestStrategy").stringValue();
+    
+    if (strategy.compare(0, 8, "flooding") == 0) {
+        // Send to all other servers
+        for(int i = 0; i < totalServers; i++){
+            if(i == serverId || !getOnlineDatastores().contains(i))
+                continue;
+            sendServerCheckPartition(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
+        }
+        EV_INFO << "[SERVER-" << serverId << "] Ask Missing Writes | (Flooding) | #Contacted: " << totalServers - 1 << endl;
+    } else if (strategy.compare(0, 6, "linear") == 0) {
+        double maxNodesToContact = std::min(static_cast<double>(totalServers-1), par("maxNodesToContact").doubleValue());
+        // Create a set of candidate servers (listed by ID) to contact
+        // Filter the set by excluding the server itself and the ones that are offline
+        // If inside a partition, exclude the ones not having an active channel
+        std::set<int> candidateServers;
+        for(int i = 0; i < totalServers; i++){
+            if(i == serverId || !getOnlineDatastores().contains(i) || (activeNetworkPartition && isChannelAffectedByNetworkPartition[i]))
+                continue;
+            candidateServers.insert(i);
+        }
+        // Uniform Random Bit Generator
+        std::random_device rd;
+        std::mt19937 g(rd());
+        // Randomly shuffle the candidate servers
+        std::vector<int> shuffledServers(candidateServers.begin(), candidateServers.end());
+        std::shuffle(shuffledServers.begin(), shuffledServers.end(), g);
+        int contacted = 0;
+        // Send to all the remaining servers in the set
+        for( auto it = shuffledServers.begin(); it != shuffledServers.end() && contacted < maxNodesToContact; ++it){
+            int i = *it;
+            contacted++;
+            sendServerCheckPartition(mwrMsg->dup(), "serverChannels$o", fromServerToGate(i));
+        }
+        EV_INFO << "[SERVER-" << serverId << "] Ask Missing Writes | (Linear) | #Contacted: " << contacted << endl;
+        } else {
             EV_INFO << "Fatal Error! | Unknown MissingWritesRequestStrategy" << endl;
             exit(-1);
-         }
+        }
+        delete mwrMsg;
+}
 
-         delete mwrMsg;
- 
-         break;
+// Helper function to count total missing writes
+int countTotalMissingWrites(const std::map<int, std::set<int>>& missingWrites) {
+    int count = 0;
+    for (const auto& pair : missingWrites) {
+        count += pair.second.size();
     }
-    case -1: //Write is older than the current state of the Data Store -> Discard
-    {   
-        EV_INFO << "[SERVER-" << serverId << "] Write Propagation Ignored | (No New Information)" << endl;
-        break;
-    }
-    default:
-    {
-        EV_INFO << "Fatal Error!" << endl;
-        exit(-1);
-    }
-    }
-  
+    return count;
 }
 
 void DatastoreServer::sendUpdate(std::string key, int value){
@@ -476,14 +552,13 @@ void DatastoreServer::checkPendingUpdates(){
 
 }
 
-
 void DatastoreServer::handleMissingWrites(MissingWritesRequestMsg *msg){
     // Collect the missing write and send them to the requesting server
 
     int sourceId = msg->getSourceId();
     std::map<int, std::set<int>> missingWrites = msg->getMissingWrites();
-
     int sourceChannel = fromServerToGate(sourceId);
+    int fulfilledCount = 0;
 
     // Iterate over the sets of missing writes
     EV_INFO << "[SERVER-" << serverId << "] Checking Have Missing Writes | From: [SERVER-" << msg->getSourceId() << "]" << endl;
@@ -505,18 +580,46 @@ void DatastoreServer::handleMissingWrites(MissingWritesRequestMsg *msg){
                 updateMsg -> setVectorClock(update->second.senderVectorClock);
 
                 sendServerCheckPartition(updateMsg, "serverChannels$o", sourceChannel);
+                fulfilledCount++;
+
                 EV_INFO << "[SERVER-" << serverId << "] Send Missing Write | To: [SERVER-" << sourceId
                    << "] | <" << update->second.key << ", " << update->second.value << ">" << " | Source, ID: " << update->second.sourceId << ", " << updateId << endl;
             }
         }
     }
+
+    messageStats.missingWritesFulfilled += fulfilledCount;
 }
 
 void DatastoreServer::handleHeartbeat(HeartbeatMsg *msg) {
-    if(msg->getTimestamp() > onlineDatastores[msg->getSourceId()]) {
+    bool staleMsg = true;
+
+    if(msg->getTimestamp() > onlineDatastores[msg->getSourceId()] || onlineDatastores[msg->getSourceId()] == SIMTIME_ZERO) {
         onlineDatastores[msg->getSourceId()] = msg->getTimestamp();
+        staleMsg = false;
     }
-    EV_INFO << "[SERVER-" << serverId << "] Received Heartbeat | From: [SERVER-" << msg->getSourceId() << "]" << endl;
+    std::map<int,int> senderVectorClock = msg->getVectorClock();
+
+    EV_INFO << "[SERVER-" << serverId << "] Received Heartbeat | From: [SERVER-" << msg->getSourceId() << "]";
+    if(staleMsg)
+        EV_INFO << " | (Stale Message - Ignored) ";
+    EV_INFO << endl;
+
+    bool requestingWrites = false;
+
+    if(!isSatisfyingCausalDependencies(msg->getSourceId(), msg->getVectorClock())){
+
+        std::map<int, std::set<int>> allMissingWrites;
+        std::map<int, std::set<int>> missingWritesToRequest;
+
+        processMissingWrites(senderVectorClock, allMissingWrites, missingWritesToRequest, lastRequestTimes, simTime());
+        
+        if(!missingWritesToRequest.empty())
+            sendMissingWritesRequest(missingWritesToRequest);
+        else
+            requestingWrites = true;
+    }
+
 }
 
 std::set<int> DatastoreServer::getOnlineDatastores() {
@@ -537,6 +640,7 @@ void DatastoreServer::sendHeartbeats() {
         HeartbeatMsg *heartbeatMsg = new HeartbeatMsg();
         heartbeatMsg->setSourceId(serverId);
         heartbeatMsg->setTimestamp(simTime().dbl());
+        heartbeatMsg->setVectorClock(vectorClock);
 
         sendServerCheckPartition(heartbeatMsg, "serverChannels$o", gateIndex);
     }
@@ -581,7 +685,6 @@ DatastoreServer::Update DatastoreServer::storeWrite(std::string key, int value, 
     return update;
 }
 
-
 inline int DatastoreServer::fromServerToGate(int id){
     return id > serverId ? id - 1 : id;
 }
@@ -604,10 +707,53 @@ std::string DatastoreServer::parseMessageToRetrieveSenderModuleClass(cMessage *m
 void DatastoreServer::sendServerCheckPartition(cMessage* msg , const char* gateName, int gateIndex){
     if(activeNetworkPartition && isChannelAffectedByNetworkPartition[gateIndex]){
             EV_INFO << "[SERVER-" << serverId << "] Outgoing Packet Not Sent | Cause: Network Partition | To: [SERVER-" << fromGateToServer(gateIndex) << "] | Type: " << msg->getClassName() << endl;
+            messageStats.incrementDiscarded(msg->getClassName()); 
             delete msg;
             return;
     }
+
+    messageStats.incrementOutgoing(msg->getClassName());
     send(msg, gateName, gateIndex);
 }
 
+void DatastoreServer::logMessageStats() {
+    EV_INFO << "[SERVER-" << serverId << "] MESSAGE STATISTICS SUMMARY:" << endl;
+    
+    // Outgoing messages
+    EV_INFO << "  Outgoing Messages by Type:" << endl;
+    for (const auto& [type, count] : messageStats.outgoingByType) {
+        EV_INFO << "    " << type << ": " << count << endl;
+    }
+    
+    // Incoming messages
+    EV_INFO << "  Incoming Messages by Type:" << endl;
+    for (const auto& [type, count] : messageStats.incomingByType) {
+        EV_INFO << "    " << type << ": " << count << endl;
+    }
+    
+    // Discarded messages
+    EV_INFO << "  Discarded Messages by Type:" << endl;
+    for (const auto& [type, count] : messageStats.discardedByType) {
+        EV_INFO << "    " << type << ": " << count << endl;
+    }
+    
+    // MissingWrites Stats
+    EV_INFO << "  Missing Writes Request Statistics:" << endl;
+    EV_INFO << "    Requested (By This Server To Others): " << messageStats.missingWritesRequested << endl;
+    EV_INFO << "    Skipped (Not Sent By This Server Due To Cooldown): " << messageStats.missingWritesSkippedCooldown << endl;
+    EV_INFO << "    Batched Request Messages: " << messageStats.totalBatchedRequests << endl;
+    EV_INFO << "    \nFulfilled (From Others By This Server): " << messageStats.missingWritesFulfilled << endl;
 
+    
+    // Efficiency metrics
+    double requestEfficiency = messageStats.missingWritesRequested > 0 ? 
+        (double)messageStats.missingWritesFulfilled / messageStats.missingWritesRequested * 100.0 : 0.0;
+    double cooldownEfficiency = (messageStats.missingWritesRequested + messageStats.missingWritesSkippedCooldown) > 0 ? 
+        (double)messageStats.missingWritesSkippedCooldown / (messageStats.missingWritesRequested + messageStats.missingWritesSkippedCooldown) * 100.0 : 0.0;
+    
+    EV_INFO << "  Efficiency Metrics:" << endl;
+    EV_INFO << "    Request Fulfillment Rate: " << requestEfficiency << "%" << endl;
+    EV_INFO << "    Cooldown Effectiveness: " << cooldownEfficiency << "%" << endl;
+    
+    messageStats.recordScalar(this, "msg_stats_");
+}

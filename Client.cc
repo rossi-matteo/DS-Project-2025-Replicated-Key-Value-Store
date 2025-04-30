@@ -50,15 +50,15 @@ void Client::initialize() {
 
 void Client::finish() {
     EV_INFO << "[CLIENT-" << clientId << "] Terminating |" << endl;
-    EV_INFO << "Reads performed: " << numReadsPerformed << endl;
-    EV_INFO << "Writes performed: " << numWritesPerformed << endl;
-    EV_INFO << "Failed operations: " << numFailedOperations << endl;
-    EV_INFO << "Total operation time: " << totalOperationTime << endl;
+    EV_INFO << "Reads Performed: " << numReadsPerformed << endl;
+    EV_INFO << "Writes Performed: " << numWritesPerformed << endl;
+    EV_INFO << "Failed Operations: " << numFailedOperations << endl;
+    EV_INFO << "Total Operational Time: " << totalOperationTime << " secs" << endl;
     if (numReadsPerformed > 0){
-        EV_INFO << "Read Latency: " << readLatencyStats.getMean() << endl;
+        EV_INFO << "Read Latency: " << readLatencyStats.getMean() << " secs" << endl;
     }
     if (numWritesPerformed > 0){
-        EV_INFO << "Write Latency: " << writeLatencyStats.getMean() << endl;
+        EV_INFO << "Write Latency: " << writeLatencyStats.getMean() << " secs" << endl;
     }
 }
 
@@ -80,7 +80,7 @@ void Client::handleMessage(cMessage *msg) {
             currentOperation = OP_NONE;
             simtime_t latency = simTime() - currentOperationStartTime;
             readLatencyStats.collect(latency);
-            totalOperationTime += latency.dbl(); // Accumulate operation time
+            totalOperationTime += latency.dbl();
             EV_INFO << "[CLIENT-" << clientId << "] Read Reply | <" << readResponse -> getKey() << ", " << readResponse -> getValue() << "> | Latency: " << latency << endl;
         }
     } else if(dynamic_cast<WriteResponseMsg *>(inboundMsg)){
@@ -89,7 +89,7 @@ void Client::handleMessage(cMessage *msg) {
             currentOperation = OP_NONE;
             simtime_t latency = simTime() - currentOperationStartTime;
             writeLatencyStats.collect(latency);
-            totalOperationTime += latency.dbl(); // Accumulate operation time
+            totalOperationTime += latency.dbl();
             EV_INFO << "[CLIENT-" << clientId << "] Write Reply | <" << writeResponse -> getKey() << "> | To: [SERVER-" << connectedServerId << "] | Latency: " << latency << endl;
         }
     }
@@ -99,8 +99,8 @@ void Client::handleMessage(cMessage *msg) {
 
 void Client::performOperation() {
     if (currentOperation != OP_NONE){
-        EV_INFO << "[CLIENT-" << clientId << "] Operation Not Performed In Time | (By the server - Message Lost or Slow)" << endl;
-        numFailedOperations++; // Increment failed operations
+        EV_INFO << "[CLIENT-" << clientId << "] Operation Not Performed In Time | (Message Lost by the Server)" << endl;
+        numFailedOperations++;
         currentOperation = OP_NONE;
         return;
     }

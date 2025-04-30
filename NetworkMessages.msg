@@ -56,6 +56,7 @@ message WritePropagationMsg extends NetworkMsg {
 
 message HeartbeatMsg extends NetworkMsg{
     simtime_t timestamp;
+    VectorClock vectorClock;
 }
 
 message MissingWritesRequestMsg extends NetworkMsg {
