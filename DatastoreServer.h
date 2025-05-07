@@ -33,14 +33,15 @@ struct MessageStats{
     
     // Discarded messages (Omission/Network Partition) by type
     std::map<std::string, int> discardedByType;
+
+    //Tracking how many partitions started from this server
+    int partitionsStarted; // Number of partitions started from this server
     
     // Specific tracking for MissingWrites requests
-    int missingWritesRequested;       // Total missing writes requested
-    int missingWritesFulfilled;       // Missing writes successfully sent back
-    int missingWritesSkippedCooldown; // Missing writes not requested due to cooldown
+    int missingWritesUpdatesRequested;       // Total missing writes requested
+    int missingWritesUpdatesSkippedCooldown; // Missing writes not requested due to cooldown
     
-    //  Efficiency Metrics
-    int totalBatchedRequests;        // Number of batched request messages sent
+    int missingWritesFulfilled;       // Missing writes successfully sent back
     
     // Add or increment a message count by type
     void incrementOutgoing(const std::string& msgType) {
@@ -73,10 +74,12 @@ struct MessageStats{
         }
         
         // Record MissingWrites statistics
-        component->recordScalar((prefix + "missing_writes_requested").c_str(), missingWritesRequested);
-        component->recordScalar((prefix + "missing_writes_fulfilled").c_str(), missingWritesFulfilled);
-        component->recordScalar((prefix + "missing_writes_skipped_cooldown").c_str(), missingWritesSkippedCooldown);
-        component->recordScalar((prefix + "total_batched_requests").c_str(), totalBatchedRequests);
+        component->recordScalar((prefix + "partitions_started").c_str(), partitionsStarted);
+        
+        component->recordScalar((prefix + "missing_writes_updates_requested").c_str(), missingWritesUpdatesRequested);
+        component->recordScalar((prefix + "missing_writes_updates_skipped_cooldown").c_str(), missingWritesUpdatesSkippedCooldown);
+
+        component->recordScalar((prefix + "missing_writes_msg_fulfilled").c_str(), missingWritesFulfilled);
     }
 };   
 

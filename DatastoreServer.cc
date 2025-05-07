@@ -34,11 +34,14 @@ void DatastoreServer::initialize(){
     networkPartitionLinkProbability = par("networkPartitionLinkProbability").doubleValue();
     activeNetworkPartition = false;
 
+
     // Initializing Log Stats
-    messageStats.missingWritesRequested = 0;
+    messageStats.partitionsStarted = 0;
+
+    messageStats.missingWritesUpdatesRequested = 0;
+    messageStats.missingWritesUpdatesSkippedCooldown = 0;
+
     messageStats.missingWritesFulfilled = 0;
-    messageStats.missingWritesSkippedCooldown = 0;
-    messageStats.totalBatchedRequests = 0;
 
     isChannelAffectedByNetworkPartition = (bool*) malloc(sizeof(bool) * (totalServers - 1));
 
@@ -120,6 +123,7 @@ void DatastoreServer::handleMessage(cMessage *msg){
                 EV_INFO << endl;
                 
                 activeNetworkPartition = true;
+                messageStats.partitionsStarted++;
             }
 
             scheduleAt(simTime() + par("networkPartitionEventInterval").doubleValue(), networkPartitionEventTimer);
@@ -414,9 +418,6 @@ void DatastoreServer::processMissingWrites(
                         }
                     }
 
-                    messageStats.missingWritesRequested += requestedCount;
-                    messageStats.missingWritesSkippedCooldown += skippedCount;
-
                     // Log all skipped requests in a single message
                     if (!skippedRequests.empty()) {
                         EV_INFO << "[SERVER-" << serverId << "] Skipping Write Requests | ";
@@ -430,6 +431,9 @@ void DatastoreServer::processMissingWrites(
             }
         }
     }
+
+    messageStats.missingWritesUpdatesRequested += requestedCount;
+    messageStats.missingWritesUpdatesSkippedCooldown += skippedCount;
 }
 
 void DatastoreServer::sendMissingWritesRequest(std::map<int, std::set<int>>(missingWritesToRequest)){
@@ -437,8 +441,6 @@ void DatastoreServer::sendMissingWritesRequest(std::map<int, std::set<int>>(miss
     MissingWritesRequestMsg *mwrMsg = new MissingWritesRequestMsg();
     mwrMsg->setSourceId(serverId);
     mwrMsg->setMissingWrites(std::map<int, std::set<int>>(missingWritesToRequest));
-
-    messageStats.totalBatchedRequests++;
 
     std::string strategy = par("missingWritesRequestStrategy").stringValue();
     
@@ -558,7 +560,7 @@ void DatastoreServer::handleMissingWrites(MissingWritesRequestMsg *msg){
     int sourceId = msg->getSourceId();
     std::map<int, std::set<int>> missingWrites = msg->getMissingWrites();
     int sourceChannel = fromServerToGate(sourceId);
-    int fulfilledCount = 0;
+    int updatesSent = 0;
 
     // Iterate over the sets of missing writes
     EV_INFO << "[SERVER-" << serverId << "] Checking Have Missing Writes | From: [SERVER-" << msg->getSourceId() << "]" << endl;
@@ -580,15 +582,15 @@ void DatastoreServer::handleMissingWrites(MissingWritesRequestMsg *msg){
                 updateMsg -> setVectorClock(update->second.senderVectorClock);
 
                 sendServerCheckPartition(updateMsg, "serverChannels$o", sourceChannel);
-                fulfilledCount++;
+                updatesSent++;
 
                 EV_INFO << "[SERVER-" << serverId << "] Send Missing Write | To: [SERVER-" << sourceId
                    << "] | <" << update->second.key << ", " << update->second.value << ">" << " | Source, ID: " << update->second.sourceId << ", " << updateId << endl;
             }
         }
     }
-
-    messageStats.missingWritesFulfilled += fulfilledCount;
+    if(updatesSent > 0)
+        messageStats.missingWritesFulfilled++;
 }
 
 void DatastoreServer::handleHeartbeat(HeartbeatMsg *msg) {
@@ -719,6 +721,8 @@ void DatastoreServer::sendServerCheckPartition(cMessage* msg , const char* gateN
 void DatastoreServer::logMessageStats() {
     EV_INFO << "[SERVER-" << serverId << "] MESSAGE STATISTICS SUMMARY:" << endl;
     
+    EV_INFO << "  Network Partitions Started By This Server: " << messageStats.partitionsStarted << endl;
+
     // Outgoing messages
     EV_INFO << "  Outgoing Messages by Type:" << endl;
     for (const auto& [type, count] : messageStats.outgoingByType) {
@@ -739,21 +743,20 @@ void DatastoreServer::logMessageStats() {
     
     // MissingWrites Stats
     EV_INFO << "  Missing Writes Request Statistics:" << endl;
-    EV_INFO << "    Requested (By This Server To Others): " << messageStats.missingWritesRequested << endl;
-    EV_INFO << "    Skipped (Not Sent By This Server Due To Cooldown): " << messageStats.missingWritesSkippedCooldown << endl;
-    EV_INFO << "    Batched Request Messages: " << messageStats.totalBatchedRequests << endl;
-    EV_INFO << "    \nFulfilled (From Others By This Server): " << messageStats.missingWritesFulfilled << endl;
+    EV_INFO << "    Updates Requested (By This Server To Others): " << messageStats.missingWritesUpdatesRequested << endl;
+    EV_INFO << "    Updates Skipped (Not Sent By This Server Due To Cooldown): " << messageStats.missingWritesUpdatesSkippedCooldown << endl;
+    EV_INFO << "    Fulfilled Msgs (This Server Had at Least One Update When Requested): " << messageStats.missingWritesFulfilled << endl;
 
-    
     // Efficiency metrics
-    double requestEfficiency = messageStats.missingWritesRequested > 0 ? 
-        (double)messageStats.missingWritesFulfilled / messageStats.missingWritesRequested * 100.0 : 0.0;
-    double cooldownEfficiency = (messageStats.missingWritesRequested + messageStats.missingWritesSkippedCooldown) > 0 ? 
-        (double)messageStats.missingWritesSkippedCooldown / (messageStats.missingWritesRequested + messageStats.missingWritesSkippedCooldown) * 100.0 : 0.0;
+    double requestEfficiency = messageStats.incomingByType["MissingWritesRequestMsg"] > 0 ?
+        (double)messageStats.missingWritesFulfilled / messageStats.incomingByType["MissingWritesRequestMsg"] * 100.0 : 0.0;
     
+    double cooldownEfficiency = (messageStats.missingWritesUpdatesRequested + messageStats.missingWritesUpdatesSkippedCooldown) > 0 ?
+        (double) messageStats.missingWritesUpdatesSkippedCooldown / (messageStats.missingWritesUpdatesRequested + messageStats.missingWritesUpdatesSkippedCooldown) * 100.0 : 0.0;
+
     EV_INFO << "  Efficiency Metrics:" << endl;
     EV_INFO << "    Request Fulfillment Rate: " << requestEfficiency << "%" << endl;
-    EV_INFO << "    Cooldown Effectiveness: " << cooldownEfficiency << "%" << endl;
+    EV_INFO << "    Cooldown Effectiveness Rate: " << cooldownEfficiency << "%" << endl;
     
     messageStats.recordScalar(this, "msg_stats_");
 }

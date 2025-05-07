@@ -22,12 +22,12 @@ simple DatastoreServer{
         int numClientsPerServer;
 
         double messageDelay @unit(s) = default(uniform(0.1s,0.5s));
-        double omissionFailureProbability = default(0.1);
+        double omissionFailureProbability = default(0.2);
 
         double createNetworkPartitionProbability = default(0.1);
         double terminateNetworkPartitionProbability = default(0.5);
         double networkPartitionLinkProbability = default(0.5);
-        double networkPartitionEventInterval @unit(s) = default(uniform(5s,10s));
+        double networkPartitionEventInterval @unit(s) = default(10s);
 
         double heartbeatInterval @unit(s) = messageDelay * 10;
         double maxAllowedHeartbeatDelay @unit(s) = heartbeatInterval * 3;
@@ -51,14 +51,9 @@ simple Client{
         inout serverChannel;
 }
 
-channel ServerDelayChannel extends ned.DatarateChannel {
-    parameters:
-        delay = uniform(0.1s, 0.5s);
-}
-
 network CausalConsistencyDatastoreNetwork{
     parameters:
-        int numServers = default(3);
+        int numServers = default(5);
         int numClientsPerServer = default(2);
         
     submodules:
@@ -81,11 +76,11 @@ network CausalConsistencyDatastoreNetwork{
     connections:
         //Servers Connection
         for i=0..numServers - 2, for j=i+1..numServers-1 {
-            servers[i].serverChannels[j-1] <--> ServerDelayChannel <--> servers[j].serverChannels[i];
+            servers[i].serverChannels[j-1] <--> {delay = default(uniform(400ms,500ms));} <--> servers[j].serverChannels[i];
         }
         
         //Clients Connection
         for i=0..numServers * numClientsPerServer - 1 {
-            clients[i].serverChannel <--> {delay = default(uniform(0.01s,0.1s));} <--> servers[clients[i].connectedServerId].clientChannels[i % numClientsPerServer];
+            clients[i].serverChannel <--> {delay = default(uniform(50ms,100ms));} <--> servers[clients[i].connectedServerId].clientChannels[i % numClientsPerServer];
         }
 }
