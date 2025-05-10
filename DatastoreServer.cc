@@ -305,13 +305,13 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
     Update propagatedWrite = storeWrite(key, value, sourceId, senderVectorClock);
 
     int updateId = senderVectorClock[sourceId];
-    //TODO: Clean the structure containing the missingWritesRequested timestamps, since now we have the update stored
+    // Clean the structure containing the missingWritesRequested timestamps, since now we have the update stored
     if (lastRequestTimes.find(sourceId) != lastRequestTimes.end()) {
         auto updateIt = lastRequestTimes[sourceId].find(updateId);
         if (updateIt != lastRequestTimes[sourceId].end()) {
             RequestInfo foundUpdate = updateIt->second;
             lastRequestTimes[sourceId].erase(updateIt);
-            EV_INFO << "[SERVER-" << serverId << "] Remove MissingWriteRequest Timestamp | From: [SERVER-" << sourceId << "] | ID: " << updateId << endl;
+            //EV_INFO << "[SERVER-" << serverId << "] Remove MissingWriteRequest Timestamp | From: [SERVER-" << sourceId << "] | ID: " << updateId << endl;
         }
     }
 
@@ -334,7 +334,8 @@ void DatastoreServer::handleUpdate(WritePropagationMsg *msg){
                 EV_INFO << "[SERVER-" << serverId << "] Remove Queued Write | From: [SERVER-" << it->sourceId << "] | <" << it->key << ", " << it->value << ">" << endl;
             }
 
-            // TODO: For performance purposes, perform this operation after a batch of data has been processed instead of every time
+            // For performance purposes, this operation could be performed after a batch of data
+            // has been processed instead of every time
             deleteUpdatesAppliedByEveryone();
             break;
         }
